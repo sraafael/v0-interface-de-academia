@@ -29,19 +29,34 @@ import {
   Clock,
   ClipboardList,
   Calendar,
-  UserPlus,
   ChevronRight,
   ArrowLeftRight,
   Trash2,
   Search,
-  Eye,
-  Ruler,
   Weight,
+  Ruler,
+  AlertTriangle,
+  Plus,
+  FileText,
+  PenLine,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  X,
+  UserCheck,
 } from "lucide-react"
-import { workoutPlans, getAllExercises, type Exercise, type WorkoutPlan, type GoalType } from "@/lib/workout-data"
+import { workoutPlans, getAllExercises, getExercisesByCategory, getCategoryLabel, type Exercise, type WorkoutPlan, type GoalType, type ExerciseCategory } from "@/lib/workout-data"
 
 interface DashboardProfessorProps {
   onLogout: () => void
+}
+
+type TrainingStatus = "ativo" | "vencendo" | "sem-treino"
+
+interface EvolutionEntry {
+  date: string
+  weight: number
+  note: string
 }
 
 interface StudentData {
@@ -52,10 +67,13 @@ interface StudentData {
   weight: number
   height: number
   imc: number
-  goal: GoalType
-  plan: WorkoutPlan
+  goal: GoalType | ""
+  plan: WorkoutPlan | null
   status: "ativo" | "inativo"
+  trainingStatus: TrainingStatus
   startDate: string
+  lastPlanDate: string
+  evolution: EvolutionEntry[]
 }
 
 function calculateIMC(weight: number, height: number): number {
@@ -71,95 +89,113 @@ function getIMCLabel(imc: number): { label: string; color: string } {
   return { label: "Obesidade", color: "text-destructive" }
 }
 
+function getTrainingStatusInfo(status: TrainingStatus) {
+  switch (status) {
+    case "ativo":
+      return { label: "Treino Ativo", dotColor: "bg-primary", textColor: "text-primary" }
+    case "vencendo":
+      return { label: "Treino Vencendo", dotColor: "bg-[oklch(0.75_0.15_85)]", textColor: "text-[oklch(0.75_0.15_85)]" }
+    case "sem-treino":
+      return { label: "Sem Treino", dotColor: "bg-destructive", textColor: "text-destructive" }
+  }
+}
+
+function daysSince(dateStr: string): number {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
   const [students, setStudents] = useState<StudentData[]>([
     {
       id: "1", name: "Ana Costa", ra: "2024001001", age: 25, weight: 62, height: 165,
       imc: calculateIMC(62, 165), goal: "hipertrofia",
       plan: JSON.parse(JSON.stringify(workoutPlans[0])),
-      status: "ativo", startDate: "2025-01-15",
+      status: "ativo", trainingStatus: "ativo", startDate: "2025-01-15", lastPlanDate: "2026-01-20",
+      evolution: [
+        { date: "2026-01-20", weight: 62, note: "Inicio do treino de hipertrofia." },
+        { date: "2026-02-10", weight: 63.2, note: "Bom progresso, aumentando cargas." },
+      ],
     },
     {
       id: "2", name: "Bruno Lima", ra: "2024001002", age: 30, weight: 95, height: 178,
       imc: calculateIMC(95, 178), goal: "emagrecimento",
       plan: JSON.parse(JSON.stringify(workoutPlans[1])),
-      status: "ativo", startDate: "2025-02-01",
+      status: "ativo", trainingStatus: "vencendo", startDate: "2025-02-01", lastPlanDate: "2026-01-05",
+      evolution: [
+        { date: "2026-01-05", weight: 97, note: "Inicio com foco em emagrecimento." },
+        { date: "2026-02-01", weight: 95, note: "Perdeu 2kg, manter cardio intenso." },
+      ],
     },
     {
       id: "3", name: "Carla Mota", ra: "2024001003", age: 22, weight: 55, height: 160,
       imc: calculateIMC(55, 160), goal: "condicionamento",
       plan: JSON.parse(JSON.stringify(workoutPlans[2])),
-      status: "ativo", startDate: "2025-01-20",
+      status: "ativo", trainingStatus: "ativo", startDate: "2025-01-20", lastPlanDate: "2026-02-15",
+      evolution: [
+        { date: "2026-02-15", weight: 55, note: "Condicionamento em dia. Mantendo." },
+      ],
     },
     {
       id: "4", name: "Diego Reis", ra: "2024001004", age: 28, weight: 82, height: 175,
-      imc: calculateIMC(82, 175), goal: "hipertrofia",
-      plan: JSON.parse(JSON.stringify(workoutPlans[0])),
-      status: "ativo", startDate: "2024-11-10",
+      imc: calculateIMC(82, 175), goal: "",
+      plan: null,
+      status: "ativo", trainingStatus: "sem-treino", startDate: "2026-02-20", lastPlanDate: "",
+      evolution: [],
+    },
+    {
+      id: "5", name: "Fernanda Souza", ra: "2024001005", age: 24, weight: 68, height: 170,
+      imc: calculateIMC(68, 170), goal: "",
+      plan: null,
+      status: "ativo", trainingStatus: "sem-treino", startDate: "2026-02-22", lastPlanDate: "",
+      evolution: [],
     },
   ])
 
-  const [showAddStudent, setShowAddStudent] = useState(false)
   const [showStudentDetail, setShowStudentDetail] = useState<StudentData | null>(null)
+  const [detailTab, setDetailTab] = useState<"treino" | "evolucao">("treino")
   const [showSwapExercise, setShowSwapExercise] = useState<{
     studentId: string
     dayIndex: number
     exerciseIndex: number
   } | null>(null)
+  const [swapCategoryFilter, setSwapCategoryFilter] = useState<ExerciseCategory | "all">("all")
+  const [swapSearch, setSwapSearch] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Add student form state
-  const [newName, setNewName] = useState("")
-  const [newRa, setNewRa] = useState("")
-  const [newAge, setNewAge] = useState("")
-  const [newWeight, setNewWeight] = useState("")
-  const [newHeight, setNewHeight] = useState("")
-  const [newGoal, setNewGoal] = useState<GoalType | "">("")
+  // Add/Create workout state
+  const [showAddWorkout, setShowAddWorkout] = useState<string | null>(null) // student id
+  const [addWorkoutMode, setAddWorkoutMode] = useState<"choose" | "template" | "scratch" | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<GoalType | "">("")
+  const [scratchGoal, setScratchGoal] = useState<GoalType | "">("")
+  const [scratchDays, setScratchDays] = useState<{ label: string; muscleGroups: string; exercises: Exercise[] }[]>([
+    { label: "Treino A", muscleGroups: "", exercises: [] },
+    { label: "Treino B", muscleGroups: "", exercises: [] },
+    { label: "Treino C", muscleGroups: "", exercises: [] },
+  ])
+  const [scratchAddExDay, setScratchAddExDay] = useState<number | null>(null)
+  const [scratchExCategoryFilter, setScratchExCategoryFilter] = useState<ExerciseCategory | "all">("all")
+  const [scratchExSearch, setScratchExSearch] = useState("")
+
+  // Evolution form
+  const [evoWeight, setEvoWeight] = useState("")
+  const [evoNote, setEvoNote] = useState("")
+
+  // Agenda class detail
+  const [showClassDetail, setShowClassDetail] = useState<typeof todayClasses[number] | null>(null)
 
   const todayClasses = [
-    { time: "06:00", name: "Musculacao - Turma A", students: 12, status: "concluida" },
-    { time: "08:00", name: "Funcional", students: 8, status: "concluida" },
-    { time: "10:00", name: "Musculacao - Turma B", students: 15, status: "em-andamento" },
-    { time: "14:00", name: "Personal - Maria Silva", students: 1, status: "proxima" },
-    { time: "16:00", name: "Crossfit", students: 20, status: "proxima" },
-    { time: "18:00", name: "Musculacao - Turma C", students: 18, status: "proxima" },
+    { time: "06:00", name: "Musculacao - Turma A", studentNames: ["Ana Costa", "Bruno Lima", "Diego Reis"], status: "concluida" as const },
+    { time: "08:00", name: "Funcional", studentNames: ["Carla Mota", "Fernanda Souza"], status: "concluida" as const },
+    { time: "10:00", name: "Musculacao - Turma B", studentNames: ["Ana Costa", "Diego Reis", "Fernanda Souza"], status: "em-andamento" as const },
+    { time: "14:00", name: "Personal - Maria Silva", studentNames: ["Maria Silva"], status: "proxima" as const },
+    { time: "16:00", name: "Crossfit", studentNames: ["Bruno Lima", "Carla Mota", "Ana Costa", "Diego Reis"], status: "proxima" as const },
+    { time: "18:00", name: "Musculacao - Turma C", studentNames: ["Fernanda Souza", "Bruno Lima", "Carla Mota", "Ana Costa", "Diego Reis"], status: "proxima" as const },
   ]
 
-  const computedIMC = newWeight && newHeight ? calculateIMC(Number(newWeight), Number(newHeight)) : 0
-
-  const handleAddStudent = () => {
-    if (!newName || !newRa || !newAge || !newWeight || !newHeight || !newGoal) return
-
-    const selectedPlan = workoutPlans.find((p) => p.goal === newGoal)
-    if (!selectedPlan) return
-
-    const newStudent: StudentData = {
-      id: Date.now().toString(),
-      name: newName,
-      ra: newRa,
-      age: Number(newAge),
-      weight: Number(newWeight),
-      height: Number(newHeight),
-      imc: calculateIMC(Number(newWeight), Number(newHeight)),
-      goal: newGoal,
-      plan: JSON.parse(JSON.stringify(selectedPlan)),
-      status: "ativo",
-      startDate: new Date().toISOString().split("T")[0],
-    }
-
-    setStudents((prev) => [...prev, newStudent])
-    setShowAddStudent(false)
-    resetForm()
-  }
-
-  const resetForm = () => {
-    setNewName("")
-    setNewRa("")
-    setNewAge("")
-    setNewWeight("")
-    setNewHeight("")
-    setNewGoal("")
-  }
+  const pendingStudents = students.filter((s) => s.trainingStatus === "sem-treino")
+  const expiringStudents = students.filter((s) => s.trainingStatus === "vencendo")
 
   const handleSwapExercise = (newExercise: Exercise) => {
     if (!showSwapExercise) return
@@ -167,7 +203,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
 
     setStudents((prev) =>
       prev.map((s) => {
-        if (s.id !== studentId) return s
+        if (s.id !== studentId || !s.plan) return s
         const updatedPlan = { ...s.plan }
         const updatedDays = [...updatedPlan.days]
         const updatedExercises = [...updatedDays[dayIndex].exercises]
@@ -178,26 +214,28 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
       })
     )
 
-    if (showStudentDetail) {
-      const updated = students.find((s) => s.id === showSwapExercise.studentId)
-      if (updated) {
-        const updatedPlan = { ...updated.plan }
+    if (showStudentDetail && showStudentDetail.id === studentId) {
+      setShowStudentDetail((prev) => {
+        if (!prev || !prev.plan) return prev
+        const updatedPlan = { ...prev.plan }
         const updatedDays = [...updatedPlan.days]
         const updatedExercises = [...updatedDays[dayIndex].exercises]
         updatedExercises[exerciseIndex] = { ...newExercise }
         updatedDays[dayIndex] = { ...updatedDays[dayIndex], exercises: updatedExercises }
         updatedPlan.days = updatedDays
-        setShowStudentDetail({ ...updated, plan: updatedPlan })
-      }
+        return { ...prev, plan: updatedPlan }
+      })
     }
 
     setShowSwapExercise(null)
+    setSwapCategoryFilter("all")
+    setSwapSearch("")
   }
 
   const handleRemoveExercise = (studentId: string, dayIndex: number, exerciseIndex: number) => {
     setStudents((prev) =>
       prev.map((s) => {
-        if (s.id !== studentId) return s
+        if (s.id !== studentId || !s.plan) return s
         const updatedPlan = { ...s.plan }
         const updatedDays = [...updatedPlan.days]
         const updatedExercises = updatedDays[dayIndex].exercises.filter((_, i) => i !== exerciseIndex)
@@ -209,7 +247,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
 
     if (showStudentDetail && showStudentDetail.id === studentId) {
       setShowStudentDetail((prev) => {
-        if (!prev) return prev
+        if (!prev || !prev.plan) return prev
         const updatedPlan = { ...prev.plan }
         const updatedDays = [...updatedPlan.days]
         const updatedExercises = updatedDays[dayIndex].exercises.filter((_, i) => i !== exerciseIndex)
@@ -220,11 +258,156 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
     }
   }
 
+  const handleAssignTemplate = (studentId: string) => {
+    if (!selectedTemplate) return
+    const plan = workoutPlans.find((p) => p.goal === selectedTemplate)
+    if (!plan) return
+    const newPlan = JSON.parse(JSON.stringify(plan))
+    const today = new Date().toISOString().split("T")[0]
+
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === studentId
+          ? { ...s, plan: newPlan, goal: selectedTemplate, trainingStatus: "ativo" as TrainingStatus, lastPlanDate: today }
+          : s
+      )
+    )
+
+    if (showStudentDetail && showStudentDetail.id === studentId) {
+      setShowStudentDetail((prev) =>
+        prev ? { ...prev, plan: newPlan, goal: selectedTemplate, trainingStatus: "ativo" as TrainingStatus, lastPlanDate: today } : prev
+      )
+    }
+
+    resetAddWorkout()
+  }
+
+  const handleAssignScratch = (studentId: string) => {
+    if (!scratchGoal) return
+    const goalLabel = workoutPlans.find((p) => p.goal === scratchGoal)?.goalLabel || scratchGoal
+    const newPlan: WorkoutPlan = {
+      id: `custom-${Date.now()}`,
+      goalLabel,
+      goal: scratchGoal,
+      description: "Treino personalizado",
+      days: scratchDays.map((d) => ({ ...d })),
+    }
+    const today = new Date().toISOString().split("T")[0]
+
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === studentId
+          ? { ...s, plan: newPlan, goal: scratchGoal, trainingStatus: "ativo" as TrainingStatus, lastPlanDate: today }
+          : s
+      )
+    )
+
+    if (showStudentDetail && showStudentDetail.id === studentId) {
+      setShowStudentDetail((prev) =>
+        prev ? { ...prev, plan: newPlan, goal: scratchGoal, trainingStatus: "ativo" as TrainingStatus, lastPlanDate: today } : prev
+      )
+    }
+
+    resetAddWorkout()
+  }
+
+  const resetAddWorkout = () => {
+    setShowAddWorkout(null)
+    setAddWorkoutMode(null)
+    setSelectedTemplate("")
+    setScratchGoal("")
+    setScratchDays([
+      { label: "Treino A", muscleGroups: "", exercises: [] },
+      { label: "Treino B", muscleGroups: "", exercises: [] },
+      { label: "Treino C", muscleGroups: "", exercises: [] },
+    ])
+    setScratchAddExDay(null)
+    setScratchExCategoryFilter("all")
+    setScratchExSearch("")
+  }
+
+  const addExerciseToScratchDay = (dayIndex: number, exercise: Exercise) => {
+    setScratchDays((prev) => {
+      const updated = [...prev]
+      updated[dayIndex] = { ...updated[dayIndex], exercises: [...updated[dayIndex].exercises, { ...exercise }] }
+      return updated
+    })
+  }
+
+  const removeExerciseFromScratchDay = (dayIndex: number, exIndex: number) => {
+    setScratchDays((prev) => {
+      const updated = [...prev]
+      updated[dayIndex] = { ...updated[dayIndex], exercises: updated[dayIndex].exercises.filter((_, i) => i !== exIndex) }
+      return updated
+    })
+  }
+
+  const handleAddEvolution = (studentId: string) => {
+    if (!evoWeight) return
+    const entry: EvolutionEntry = {
+      date: new Date().toISOString().split("T")[0],
+      weight: Number(evoWeight),
+      note: evoNote,
+    }
+
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === studentId
+          ? { ...s, weight: Number(evoWeight), imc: calculateIMC(Number(evoWeight), s.height), evolution: [...s.evolution, entry] }
+          : s
+      )
+    )
+
+    if (showStudentDetail && showStudentDetail.id === studentId) {
+      setShowStudentDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              weight: Number(evoWeight),
+              imc: calculateIMC(Number(evoWeight), prev.height),
+              evolution: [...prev.evolution, entry],
+            }
+          : prev
+      )
+    }
+
+    setEvoWeight("")
+    setEvoNote("")
+  }
+
   const filteredStudents = students.filter(
     (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.ra.includes(searchQuery)
   )
+
+  const getSwapExercises = () => {
+    let exercises: Exercise[] = []
+    if (swapCategoryFilter === "all") {
+      exercises = getAllExercises()
+    } else {
+      exercises = getExercisesByCategory(swapCategoryFilter)
+    }
+    if (swapSearch) {
+      exercises = exercises.filter((e) => e.name.toLowerCase().includes(swapSearch.toLowerCase()))
+    }
+    return exercises
+  }
+
+  const getScratchExercises = () => {
+    let exercises: Exercise[] = []
+    if (scratchExCategoryFilter === "all") {
+      exercises = getAllExercises()
+    } else {
+      exercises = getExercisesByCategory(scratchExCategoryFilter)
+    }
+    if (scratchExSearch) {
+      exercises = exercises.filter((e) => e.name.toLowerCase().includes(scratchExSearch.toLowerCase()))
+    }
+    return exercises
+  }
+
+  const categories: ExerciseCategory[] = ["peito", "costas", "pernas", "ombros", "biceps", "triceps", "abdomen", "gluteos", "cardio"]
 
   return (
     <div className="min-h-screen bg-background">
@@ -248,14 +431,11 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
 
       <main className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold font-mono text-foreground">
-            Ola, Professor
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Confira sua agenda, seus alunos e gerencie os treinos.
-          </p>
+          <h2 className="text-2xl font-semibold font-mono text-foreground">Ola, Professor</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Confira sua agenda, seus alunos e gerencie os treinos.</p>
         </div>
 
+        {/* Stats Cards */}
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { label: "Aulas Hoje", value: "6", icon: Calendar },
@@ -276,11 +456,53 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
           ))}
         </div>
 
+        {/* Pending Tasks Alert */}
+        {(pendingStudents.length > 0 || expiringStudents.length > 0) && (
+          <Card className="mt-6 border-[oklch(0.75_0.15_85)]/30 bg-[oklch(0.75_0.15_85)]/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base text-[oklch(0.75_0.15_85)] font-mono">
+                <AlertTriangle className="h-5 w-5" />
+                Tarefas Pendentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {pendingStudents.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { setShowStudentDetail(s); setDetailTab("treino") }}
+                  className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-left transition-colors hover:bg-destructive/10"
+                >
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-destructive" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{s.name} <span className="text-xs text-destructive font-normal">(Novo)</span></p>
+                    <p className="text-xs text-muted-foreground">Aguardando Ficha de Treino</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+              {expiringStudents.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { setShowStudentDetail(s); setDetailTab("treino") }}
+                  className="flex items-center gap-3 rounded-lg border border-[oklch(0.75_0.15_85)]/20 bg-[oklch(0.75_0.15_85)]/5 p-3 text-left transition-colors hover:bg-[oklch(0.75_0.15_85)]/10"
+                >
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-[oklch(0.75_0.15_85)]" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">Ficha com mais de 45 dias - Atualizar treino</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Tabs: Agenda / Meus Alunos (no more "Cadastrar Aluno" tab) */}
         <Tabs defaultValue="agenda" className="mt-8">
           <TabsList className="bg-secondary">
             <TabsTrigger value="agenda">Agenda</TabsTrigger>
             <TabsTrigger value="alunos">Meus Alunos</TabsTrigger>
-            <TabsTrigger value="cadastrar">Cadastrar Aluno</TabsTrigger>
           </TabsList>
 
           {/* TAB: Agenda */}
@@ -295,11 +517,15 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
               <CardContent>
                 <div className="flex flex-col gap-3">
                   {todayClasses.map((cls, i) => (
-                    <div key={i} className="flex items-center gap-4 rounded-lg border border-border bg-secondary p-3">
+                    <button
+                      key={i}
+                      onClick={() => setShowClassDetail(cls)}
+                      className="flex items-center gap-4 rounded-lg border border-border bg-secondary p-3 text-left transition-colors hover:border-[oklch(0.55_0.15_250)]/30"
+                    >
                       <span className="w-14 text-sm font-mono font-medium text-muted-foreground">{cls.time}</span>
                       <div className="flex-1">
                         <p className="text-sm font-medium text-foreground">{cls.name}</p>
-                        <p className="text-xs text-muted-foreground">{cls.students} aluno{cls.students > 1 ? "s" : ""}</p>
+                        <p className="text-xs text-muted-foreground">{cls.studentNames.length} aluno{cls.studentNames.length > 1 ? "s" : ""}</p>
                       </div>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -312,7 +538,8 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                       >
                         {cls.status === "concluida" ? "Concluida" : cls.status === "em-andamento" ? "Em andamento" : "Proxima"}
                       </span>
-                    </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </button>
                   ))}
                 </div>
               </CardContent>
@@ -343,26 +570,35 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                 <div className="flex flex-col gap-3">
                   {filteredStudents.map((student) => {
                     const imcInfo = getIMCLabel(student.imc)
+                    const tsInfo = getTrainingStatusInfo(student.trainingStatus)
                     return (
                       <div
                         key={student.id}
                         className="flex items-center gap-4 rounded-lg border border-border bg-secondary p-4 transition-colors hover:border-[oklch(0.55_0.15_250)]/30 cursor-pointer"
-                        onClick={() => setShowStudentDetail(student)}
+                        onClick={() => { setShowStudentDetail(student); setDetailTab("treino") }}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === "Enter") setShowStudentDetail(student) }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { setShowStudentDetail(student); setDetailTab("treino") } }}
                       >
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[oklch(0.55_0.15_250)]/20 text-sm font-semibold text-[oklch(0.65_0.18_250)]">
                           {student.name.split(" ").map((n) => n[0]).join("")}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">{student.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">{student.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-2 w-2 rounded-full ${tsInfo.dotColor}`} />
+                              <span className={`text-xs font-medium ${tsInfo.textColor} hidden sm:inline`}>{tsInfo.label}</span>
+                            </div>
+                          </div>
                           <p className="text-xs text-muted-foreground">RA: {student.ra}</p>
                         </div>
                         <div className="hidden sm:flex flex-col items-end gap-1">
-                          <Badge variant="outline" className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)]">
-                            {student.plan.goalLabel}
-                          </Badge>
+                          {student.plan && (
+                            <Badge variant="outline" className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)]">
+                              {student.plan.goalLabel}
+                            </Badge>
+                          )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Weight className="h-3 w-3" />{student.weight}kg
@@ -389,138 +625,42 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* TAB: Cadastrar Aluno */}
-          <TabsContent value="cadastrar">
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-foreground font-mono">
-                  <UserPlus className="h-5 w-5 text-[oklch(0.65_0.18_250)]" />
-                  Cadastrar Novo Aluno
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">Nome Completo</Label>
-                    <Input
-                      placeholder="Ex: Joao da Silva"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">RA (Registro Academico)</Label>
-                    <Input
-                      placeholder="Ex: 2024001234"
-                      value={newRa}
-                      onChange={(e) => setNewRa(e.target.value)}
-                      className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">Idade</Label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 25"
-                      value={newAge}
-                      onChange={(e) => setNewAge(e.target.value)}
-                      className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">Peso (kg)</Label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 75"
-                      value={newWeight}
-                      onChange={(e) => setNewWeight(e.target.value)}
-                      className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">Altura (cm)</Label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 175"
-                      value={newHeight}
-                      onChange={(e) => setNewHeight(e.target.value)}
-                      className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-foreground">Objetivo do Treino</Label>
-                    <Select value={newGoal} onValueChange={(v) => setNewGoal(v as GoalType)}>
-                      <SelectTrigger className="w-full bg-secondary border-border text-foreground">
-                        <SelectValue placeholder="Selecione o objetivo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hipertrofia">Hipertrofia</SelectItem>
-                        <SelectItem value="emagrecimento">Emagrecimento</SelectItem>
-                        <SelectItem value="condicionamento">Condicionamento</SelectItem>
-                        <SelectItem value="funcional">Funcional</SelectItem>
-                        <SelectItem value="forca">Forca</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* IMC Preview */}
-                {computedIMC > 0 && (
-                  <div className="mt-5 rounded-lg border border-border bg-secondary p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">IMC Calculado</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-semibold font-mono text-foreground">{computedIMC}</span>
-                        <span className={`text-xs font-medium ${getIMCLabel(computedIMC).color}`}>
-                          {getIMCLabel(computedIMC).label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Selected plan preview */}
-                {newGoal && (
-                  <div className="mt-5">
-                    <p className="mb-3 text-sm font-medium text-foreground">
-                      Plano de treino atribuido: <span className="text-[oklch(0.65_0.18_250)]">{workoutPlans.find((p) => p.goal === newGoal)?.goalLabel} - ABC</span>
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {workoutPlans
-                        .find((p) => p.goal === newGoal)
-                        ?.days.map((day, i) => (
-                          <div key={i} className="rounded-lg border border-border bg-background p-3">
-                            <p className="text-sm font-medium text-foreground">{day.label}</p>
-                            <p className="text-xs text-muted-foreground mb-2">{day.muscleGroups}</p>
-                            {day.exercises.map((ex, j) => (
-                              <p key={j} className="text-xs text-muted-foreground">
-                                {ex.name} - {ex.sets}x{ex.reps}
-                              </p>
-                            ))}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  onClick={handleAddStudent}
-                  disabled={!newName || !newRa || !newAge || !newWeight || !newHeight || !newGoal}
-                  className="mt-6 h-11 bg-[oklch(0.55_0.15_250)] text-foreground hover:bg-[oklch(0.55_0.15_250)]/90"
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Cadastrar Aluno
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </main>
 
+      {/* DIALOG: Class Detail (Agenda) */}
+      <Dialog open={!!showClassDetail} onOpenChange={(open) => !open && setShowClassDetail(null)}>
+        <DialogContent className="bg-card border-border">
+          {showClassDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-foreground font-mono">
+                  <Calendar className="h-5 w-5 text-[oklch(0.65_0.18_250)]" />
+                  {showClassDetail.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Horario: {showClassDetail.time} - {showClassDetail.studentNames.length} aluno{showClassDetail.studentNames.length > 1 ? "s" : ""}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium text-foreground mb-1">Lista de Alunos:</p>
+                {showClassDetail.studentNames.map((name, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg bg-secondary p-3">
+                    <UserCheck className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-foreground">{name}</span>
+                  </div>
+                ))}
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setShowClassDetail(null)} className="text-muted-foreground">Fechar</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* DIALOG: Student Detail */}
-      <Dialog open={!!showStudentDetail} onOpenChange={(open) => !open && setShowStudentDetail(null)}>
+      <Dialog open={!!showStudentDetail} onOpenChange={(open) => { if (!open) setShowStudentDetail(null) }}>
         <DialogContent className="max-w-2xl bg-card border-border max-h-[85vh] overflow-y-auto">
           {showStudentDetail && (
             <>
@@ -549,77 +689,475 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)]">
-                  {showStudentDetail.plan.goalLabel}
-                </Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                {showStudentDetail.plan && (
+                  <Badge variant="outline" className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)]">
+                    {showStudentDetail.plan.goalLabel}
+                  </Badge>
+                )}
                 <Badge variant="secondary" className="text-muted-foreground">
                   Inicio: {new Date(showStudentDetail.startDate).toLocaleDateString("pt-BR")}
                 </Badge>
+                {(() => {
+                  const tsInfo = getTrainingStatusInfo(showStudentDetail.trainingStatus)
+                  return (
+                    <Badge variant="outline" className={`${tsInfo.textColor} border-current/30`}>
+                      <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${tsInfo.dotColor}`} />
+                      {tsInfo.label}
+                    </Badge>
+                  )
+                })()}
               </div>
 
-              {/* Workout plan editor */}
-              <div className="flex flex-col gap-4">
-                <p className="text-sm font-medium text-foreground font-mono">Plano de Treino ABC</p>
-                {showStudentDetail.plan.days.map((day, dayIdx) => (
-                  <div key={dayIdx} className="rounded-lg border border-border bg-secondary p-4">
-                    <div className="mb-3 flex items-center justify-between">
+              {/* Detail tabs: Treino / Evolucao */}
+              <div className="flex gap-1 rounded-lg bg-secondary p-1">
+                <button
+                  onClick={() => setDetailTab("treino")}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    detailTab === "treino" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ClipboardList className="mr-1.5 inline h-4 w-4" />
+                  Plano de Treino
+                </button>
+                <button
+                  onClick={() => setDetailTab("evolucao")}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    detailTab === "evolucao" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <TrendingUp className="mr-1.5 inline h-4 w-4" />
+                  Evolucao
+                </button>
+              </div>
+
+              {/* TAB: Treino */}
+              {detailTab === "treino" && (
+                <div className="flex flex-col gap-4">
+                  {showStudentDetail.plan ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-foreground font-mono">Plano de Treino ABC</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)] hover:bg-[oklch(0.55_0.15_250)]/10"
+                          onClick={() => { setShowAddWorkout(showStudentDetail.id); setAddWorkoutMode("choose") }}
+                        >
+                          <PenLine className="mr-1.5 h-3.5 w-3.5" />
+                          Trocar Plano
+                        </Button>
+                      </div>
+                      {showStudentDetail.plan.days.map((day, dayIdx) => (
+                        <div key={dayIdx} className="rounded-lg border border-border bg-secondary p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{day.label}</p>
+                              <p className="text-xs text-muted-foreground">{day.muscleGroups}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {day.exercises.map((exercise, exIdx) => (
+                              <div key={exIdx} className="flex items-center gap-3 rounded-md bg-background p-2.5 text-sm">
+                                <span className="w-5 text-xs font-mono text-muted-foreground">{exIdx + 1}</span>
+                                <span className="flex-1 text-foreground">{exercise.name}</span>
+                                <span className="text-xs text-muted-foreground">{exercise.sets}x{exercise.reps}</span>
+                                <button
+                                  onClick={() => setShowSwapExercise({ studentId: showStudentDetail.id, dayIndex: dayIdx, exerciseIndex: exIdx })}
+                                  className="rounded p-1 text-muted-foreground hover:text-[oklch(0.65_0.18_250)] hover:bg-[oklch(0.55_0.15_250)]/10 transition-colors"
+                                  title="Trocar exercicio"
+                                >
+                                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveExercise(showStudentDetail.id, dayIdx, exIdx)}
+                                  className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                  title="Remover exercicio"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4 py-8 text-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+                        <AlertTriangle className="h-8 w-8 text-destructive" />
+                      </div>
                       <div>
-                        <p className="text-sm font-medium text-foreground">{day.label}</p>
-                        <p className="text-xs text-muted-foreground">{day.muscleGroups}</p>
+                        <p className="text-sm font-medium text-foreground">Este aluno ainda nao possui treino</p>
+                        <p className="text-xs text-muted-foreground mt-1">Crie uma ficha de treino para esse aluno.</p>
+                      </div>
+                      <Button
+                        className="bg-[oklch(0.55_0.15_250)] text-foreground hover:bg-[oklch(0.55_0.15_250)]/90"
+                        onClick={() => { setShowAddWorkout(showStudentDetail.id); setAddWorkoutMode("choose") }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Adicionar Treino
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: Evolucao */}
+              {detailTab === "evolucao" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-sm font-medium text-foreground font-mono">Historico de Evolucao</p>
+
+                  {/* Add new entry */}
+                  <div className="rounded-lg border border-border bg-secondary p-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-3">Nova Anotacao</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs text-foreground">Peso Atual (kg)</Label>
+                        <Input
+                          type="number"
+                          placeholder="Ex: 65"
+                          value={evoWeight}
+                          onChange={(e) => setEvoWeight(e.target.value)}
+                          className="h-9 bg-background border-border text-foreground placeholder:text-muted-foreground"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs text-foreground">Observacao</Label>
+                        <Input
+                          placeholder="Ex: Evitar agachamento pesado"
+                          value={evoNote}
+                          onChange={(e) => setEvoNote(e.target.value)}
+                          className="h-9 bg-background border-border text-foreground placeholder:text-muted-foreground"
+                        />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      {day.exercises.map((exercise, exIdx) => (
-                        <div
-                          key={exIdx}
-                          className="flex items-center gap-3 rounded-md bg-background p-2.5 text-sm"
-                        >
+                    <Button
+                      size="sm"
+                      disabled={!evoWeight}
+                      onClick={() => handleAddEvolution(showStudentDetail.id)}
+                      className="mt-3 bg-[oklch(0.55_0.15_250)] text-foreground hover:bg-[oklch(0.55_0.15_250)]/90"
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Registrar
+                    </Button>
+                  </div>
+
+                  {/* Timeline */}
+                  {showStudentDetail.evolution.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      {[...showStudentDetail.evolution].reverse().map((entry, i) => (
+                        <div key={i} className="flex gap-3 rounded-lg bg-secondary p-3">
+                          <div className="flex flex-col items-center">
+                            <div className="h-2.5 w-2.5 rounded-full bg-[oklch(0.65_0.18_250)]" />
+                            {i < showStudentDetail.evolution.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-mono text-muted-foreground">
+                                {new Date(entry.date).toLocaleDateString("pt-BR")}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">{entry.weight} kg</Badge>
+                            </div>
+                            {entry.note && <p className="text-sm text-foreground">{entry.note}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-6 text-center">
+                      <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Nenhum registro de evolucao ainda.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: Add/Change Workout */}
+      <Dialog open={!!showAddWorkout} onOpenChange={(open) => { if (!open) resetAddWorkout() }}>
+        <DialogContent className="max-w-2xl bg-card border-border max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-mono">
+              <Plus className="h-5 w-5 text-[oklch(0.65_0.18_250)]" />
+              {addWorkoutMode === "choose" ? "Adicionar Treino" : addWorkoutMode === "template" ? "Usar Treino Padrao" : "Criar do Zero"}
+            </DialogTitle>
+            <DialogDescription>
+              {addWorkoutMode === "choose"
+                ? "Escolha como deseja criar o treino para este aluno."
+                : addWorkoutMode === "template"
+                ? "Selecione um template pre-pronto para aplicar."
+                : "Monte a ficha de treino exercicio por exercicio."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step 1: Choose mode */}
+          {addWorkoutMode === "choose" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <button
+                onClick={() => setAddWorkoutMode("template")}
+                className="flex flex-col items-center gap-3 rounded-xl border border-border bg-secondary p-6 transition-all hover:border-[oklch(0.55_0.15_250)]/40 hover:bg-[oklch(0.55_0.15_250)]/5"
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[oklch(0.55_0.15_250)]/15">
+                  <FileText className="h-7 w-7 text-[oklch(0.65_0.18_250)]" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground">Usar Treino Padrao</p>
+                  <p className="text-xs text-muted-foreground mt-1">Selecione um template pre-pronto e personalize depois.</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setAddWorkoutMode("scratch")}
+                className="flex flex-col items-center gap-3 rounded-xl border border-border bg-secondary p-6 transition-all hover:border-[oklch(0.55_0.15_250)]/40 hover:bg-[oklch(0.55_0.15_250)]/5"
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[oklch(0.55_0.15_250)]/15">
+                  <PenLine className="h-7 w-7 text-[oklch(0.65_0.18_250)]" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground">Criar do Zero</p>
+                  <p className="text-xs text-muted-foreground mt-1">Monte a ficha manualmente, exercicio por exercicio.</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Step 2a: Template selection */}
+          {addWorkoutMode === "template" && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label className="text-foreground">Selecione o Template</Label>
+                <Select value={selectedTemplate} onValueChange={(v) => setSelectedTemplate(v as GoalType)}>
+                  <SelectTrigger className="bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Escolha um plano..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workoutPlans.map((p) => (
+                      <SelectItem key={p.id} value={p.goal}>
+                        {p.goalLabel} - ABC ({p.description})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedTemplate && (
+                <div className="flex flex-col gap-3">
+                  {workoutPlans
+                    .find((p) => p.goal === selectedTemplate)
+                    ?.days.map((day, i) => (
+                      <div key={i} className="rounded-lg border border-border bg-secondary p-3">
+                        <p className="text-sm font-medium text-foreground">{day.label}</p>
+                        <p className="text-xs text-muted-foreground mb-2">{day.muscleGroups}</p>
+                        {day.exercises.map((ex, j) => (
+                          <p key={j} className="text-xs text-muted-foreground">
+                            {j + 1}. {ex.name} - {ex.sets}x{ex.reps}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={() => setAddWorkoutMode("choose")} className="text-muted-foreground">Voltar</Button>
+                <Button
+                  disabled={!selectedTemplate}
+                  onClick={() => showAddWorkout && handleAssignTemplate(showAddWorkout)}
+                  className="bg-[oklch(0.55_0.15_250)] text-foreground hover:bg-[oklch(0.55_0.15_250)]/90"
+                >
+                  Aplicar Template
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2b: Create from scratch */}
+          {addWorkoutMode === "scratch" && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label className="text-foreground">Objetivo do Treino</Label>
+                <Select value={scratchGoal} onValueChange={(v) => setScratchGoal(v as GoalType)}>
+                  <SelectTrigger className="bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o objetivo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hipertrofia">Hipertrofia</SelectItem>
+                    <SelectItem value="emagrecimento">Emagrecimento</SelectItem>
+                    <SelectItem value="condicionamento">Condicionamento</SelectItem>
+                    <SelectItem value="funcional">Funcional</SelectItem>
+                    <SelectItem value="forca">Forca</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Days editor */}
+              {scratchDays.map((day, dayIdx) => (
+                <div key={dayIdx} className="rounded-lg border border-border bg-secondary p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{day.label}</p>
+                      <Input
+                        placeholder="Ex: Peito / Triceps"
+                        value={day.muscleGroups}
+                        onChange={(e) => {
+                          setScratchDays((prev) => {
+                            const updated = [...prev]
+                            updated[dayIdx] = { ...updated[dayIdx], muscleGroups: e.target.value }
+                            return updated
+                          })
+                        }}
+                        className="mt-1 h-8 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground w-48"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setScratchAddExDay(scratchAddExDay === dayIdx ? null : dayIdx)}
+                      className="border-[oklch(0.55_0.15_250)]/30 text-[oklch(0.65_0.18_250)]"
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Exercicio
+                    </Button>
+                  </div>
+
+                  {/* Exercise list for this day */}
+                  {day.exercises.length > 0 ? (
+                    <div className="flex flex-col gap-2 mb-2">
+                      {day.exercises.map((ex, exIdx) => (
+                        <div key={exIdx} className="flex items-center gap-3 rounded-md bg-background p-2.5 text-sm">
                           <span className="w-5 text-xs font-mono text-muted-foreground">{exIdx + 1}</span>
-                          <span className="flex-1 text-foreground">{exercise.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {exercise.sets}x{exercise.reps}
-                          </span>
+                          <span className="flex-1 text-foreground">{ex.name}</span>
+                          <span className="text-xs text-muted-foreground">{ex.sets}x{ex.reps}</span>
                           <button
-                            onClick={() =>
-                              setShowSwapExercise({
-                                studentId: showStudentDetail.id,
-                                dayIndex: dayIdx,
-                                exerciseIndex: exIdx,
-                              })
-                            }
-                            className="rounded p-1 text-muted-foreground hover:text-[oklch(0.65_0.18_250)] hover:bg-[oklch(0.55_0.15_250)]/10 transition-colors"
-                            title="Trocar exercicio"
-                          >
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleRemoveExercise(showStudentDetail.id, dayIdx, exIdx)}
+                            onClick={() => removeExerciseFromScratchDay(dayIdx, exIdx)}
                             className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            title="Remover exercicio"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       ))}
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic mb-2">Nenhum exercicio adicionado.</p>
+                  )}
+
+                  {/* Exercise search panel (inline) */}
+                  {scratchAddExDay === dayIdx && (
+                    <div className="mt-2 rounded-lg border border-[oklch(0.55_0.15_250)]/20 bg-background p-3">
+                      <div className="flex flex-col gap-2 mb-3">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Buscar exercicio..."
+                            value={scratchExSearch}
+                            onChange={(e) => setScratchExSearch(e.target.value)}
+                            className="pl-8 h-8 text-xs bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            onClick={() => setScratchExCategoryFilter("all")}
+                            className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                              scratchExCategoryFilter === "all"
+                                ? "bg-[oklch(0.55_0.15_250)] text-foreground"
+                                : "bg-secondary text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Todos
+                          </button>
+                          {categories.map((cat) => (
+                            <button
+                              key={cat}
+                              onClick={() => setScratchExCategoryFilter(cat)}
+                              className={`rounded-full px-2.5 py-1 text-xs capitalize transition-colors ${
+                                scratchExCategoryFilter === cat
+                                  ? "bg-[oklch(0.55_0.15_250)] text-foreground"
+                                  : "bg-secondary text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {getCategoryLabel(cat)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                        {getScratchExercises().map((ex) => (
+                          <button
+                            key={ex.id}
+                            onClick={() => addExerciseToScratchDay(dayIdx, ex)}
+                            className="flex items-center gap-2 rounded-md bg-secondary p-2 text-left text-xs transition-colors hover:bg-[oklch(0.55_0.15_250)]/10"
+                          >
+                            <Plus className="h-3.5 w-3.5 text-[oklch(0.65_0.18_250)] shrink-0" />
+                            <span className="flex-1 text-foreground">{ex.name}</span>
+                            <span className="text-muted-foreground capitalize">{ex.category}</span>
+                            <span className="text-muted-foreground">{ex.sets}x{ex.reps}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={() => setAddWorkoutMode("choose")} className="text-muted-foreground">Voltar</Button>
+                <Button
+                  disabled={!scratchGoal || scratchDays.every((d) => d.exercises.length === 0)}
+                  onClick={() => showAddWorkout && handleAssignScratch(showAddWorkout)}
+                  className="bg-[oklch(0.55_0.15_250)] text-foreground hover:bg-[oklch(0.55_0.15_250)]/90"
+                >
+                  Salvar Treino
+                </Button>
               </div>
-            </>
+            </div>
           )}
         </DialogContent>
       </Dialog>
 
       {/* DIALOG: Swap Exercise */}
-      <Dialog open={!!showSwapExercise} onOpenChange={(open) => !open && setShowSwapExercise(null)}>
+      <Dialog open={!!showSwapExercise} onOpenChange={(open) => { if (!open) { setShowSwapExercise(null); setSwapCategoryFilter("all"); setSwapSearch("") } }}>
         <DialogContent className="bg-card border-border max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground font-mono">Trocar Exercicio</DialogTitle>
             <DialogDescription>Selecione o novo exercicio para substituir.</DialogDescription>
           </DialogHeader>
+          <div className="flex flex-col gap-3 mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar exercicio..."
+                value={swapSearch}
+                onChange={(e) => setSwapSearch(e.target.value)}
+                className="pl-9 h-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={() => setSwapCategoryFilter("all")}
+                className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                  swapCategoryFilter === "all" ? "bg-[oklch(0.55_0.15_250)] text-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Todos
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSwapCategoryFilter(cat)}
+                  className={`rounded-full px-2.5 py-1 text-xs capitalize transition-colors ${
+                    swapCategoryFilter === cat ? "bg-[oklch(0.55_0.15_250)] text-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {getCategoryLabel(cat)}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-col gap-2">
-            {getAllExercises().map((ex) => (
+            {getSwapExercises().map((ex) => (
               <button
                 key={ex.id}
                 onClick={() => handleSwapExercise(ex)}
@@ -627,16 +1165,14 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
               >
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{ex.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {ex.category} - {ex.sets}x{ex.reps}
-                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">{ex.category} - {ex.sets}x{ex.reps}</p>
                 </div>
                 <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
               </button>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowSwapExercise(null)} className="text-muted-foreground">
+            <Button variant="ghost" onClick={() => { setShowSwapExercise(null); setSwapCategoryFilter("all"); setSwapSearch("") }} className="text-muted-foreground">
               Cancelar
             </Button>
           </DialogFooter>
