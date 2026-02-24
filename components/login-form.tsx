@@ -17,7 +17,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ role, roleLabel, icon: Icon, accentColor, onBack, onLogin }: LoginFormProps) {
-  const [email, setEmail] = useState("")
+  const [ra, setRa] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -61,15 +61,15 @@ export function LoginForm({ role, roleLabel, icon: Icon, accentColor, onBack, on
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`${role}-email`} className="text-foreground">
-            E-mail
+          <Label htmlFor={`${role}-ra`} className="text-foreground">
+            RA (Registro Academico)
           </Label>
           <Input
-            id={`${role}-email`}
-            type="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id={`${role}-ra`}
+            type="text"
+            placeholder="Ex: 2024001234"
+            value={ra}
+            onChange={(e) => setRa(e.target.value)}
             required
             className="h-11 bg-secondary border-border text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30"
           />
