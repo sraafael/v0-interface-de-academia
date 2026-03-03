@@ -49,6 +49,10 @@ import {
   Trash2,
   XCircle,
   Tag,
+  ArrowUpRight,
+  ArrowDownRight,
+  CalendarDays,
+  Check,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -61,10 +65,11 @@ type SheetType = "alunos" | "professores" | "financeiro" | "agenda" | "relatorio
 type StudentFilter = "todos" | "em-dia" | "atrasado" | "inativo"
 type FinanceDialogType = "despesa" | "recebimento" | null
 type AgendaDialogType = "criar-turma" | "cancelar-aula" | null
+type FinanceTab = "resumo" | "extrato"
 
 interface Student {
   name: string
-  ra: string
+  cpf: string
   plan: string
   status: string
   payment: string
@@ -78,7 +83,7 @@ interface Student {
 
 interface Professor {
   name: string
-  ra: string
+  cpf: string
   speciality: string
   students: number
   status: string
@@ -87,6 +92,11 @@ interface Professor {
   horario: string
   salario: string
   modalidades: string[]
+  feriasInicio?: string
+  feriasFim?: string
+  feriasPendente?: boolean
+  feriasInicioSolicitado?: string
+  feriasFimSolicitado?: string
 }
 
 interface Plan {
@@ -94,9 +104,31 @@ interface Plan {
   name: string
   price: string
   duration: string
-  features: string[]
+  modalidades: string[]
+  extras: string[]
   active: boolean
 }
+
+interface ExtratoItem {
+  id: string
+  date: string
+  description: string
+  category: string
+  type: "receita" | "despesa"
+  value: string
+  valueNum: number
+}
+
+const ALL_MODALIDADES = [
+  "Musculacao", "Funcional", "Crossfit", "Personal", "Pilates",
+  "Natacao", "HIIT", "Yoga", "Hidroginastica", "Spinning",
+  "Boxe", "Jiu-Jitsu", "Danca",
+]
+
+const ALL_EXTRAS = [
+  "Vestiario", "Armario", "Estacionamento", "Suplementos",
+  "Avaliacao Fisica", "Nutricionista", "Toalha",
+]
 
 export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   const [activeSheet, setActiveSheet] = useState<SheetType>(null)
@@ -112,6 +144,37 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   const [agendaDialog, setAgendaDialog] = useState<AgendaDialogType>(null)
   const [showAddPlanDialog, setShowAddPlanDialog] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [financeTab, setFinanceTab] = useState<FinanceTab>("resumo")
+
+  // Edit professor
+  const [editingProfessor, setEditingProfessor] = useState(false)
+  const [editProfData, setEditProfData] = useState<Professor | null>(null)
+
+  // Ferias
+  const [showFeriasDialog, setShowFeriasDialog] = useState(false)
+  const [feriasAction, setFeriasAction] = useState<"aprovar" | "reprovar" | "realocar" | null>(null)
+  const [feriasNewStart, setFeriasNewStart] = useState("")
+  const [feriasNewEnd, setFeriasNewEnd] = useState("")
+
+  // Cancelar aula
+  const [selectedCancelAula, setSelectedCancelAula] = useState<string | null>(null)
+
+  // Agenda state
+  const [agendaItems, setAgendaItems] = useState([
+    { time: "06:00", event: "Musculacao - Turma A", professor: "Prof. Ana Lima", room: "Sala 1", id: "a1" },
+    { time: "07:00", event: "Funcional", professor: "Prof. Ricardo Souza", room: "Area Externa", id: "a2" },
+    { time: "08:00", event: "Musculacao - Turma B", professor: "Prof. Ana Lima", room: "Sala 1", id: "a3" },
+    { time: "09:00", event: "Pilates", professor: "Prof. Julia Santos", room: "Sala 2", id: "a4" },
+    { time: "10:00", event: "Crossfit", professor: "Prof. Fernanda Costa", room: "Box", id: "a5" },
+    { time: "14:00", event: "Personal Training", professor: "Prof. Marcos Oliveira", room: "Sala 3", id: "a6" },
+    { time: "16:00", event: "Natacao", professor: "Prof. Thiago Reis", room: "Piscina", id: "a7" },
+    { time: "18:00", event: "Musculacao - Turma C", professor: "Prof. Ana Lima", room: "Sala 1", id: "a8" },
+    { time: "19:00", event: "Crossfit Noturno", professor: "Prof. Fernanda Costa", room: "Box", id: "a9" },
+  ])
+
+  // Plan modalidades selection
+  const [newPlanModalidades, setNewPlanModalidades] = useState<string[]>([])
+  const [newPlanExtras, setNewPlanExtras] = useState<string[]>([])
 
   const stats = [
     { label: "Alunos Ativos", value: "247", icon: Users, change: "+12%" },
@@ -135,25 +198,25 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   ]
 
   const allStudents: Student[] = [
-    { name: "Maria Silva", ra: "2024001001", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 98765-4321", email: "maria@email.com", vencimento: "10/03/2026", lastPayment: "10/02/2026", age: 25, weight: "62kg" },
-    { name: "Carlos Santos", ra: "2024001002", plan: "Basico", status: "ativo", payment: "em-dia", phone: "(11) 91234-5678", email: "carlos@email.com", vencimento: "15/03/2026", lastPayment: "15/02/2026", age: 30, weight: "78kg" },
-    { name: "Pedro Costa", ra: "2024001003", plan: "Premium", status: "ativo", payment: "atrasado", phone: "(11) 99876-1234", email: "pedro@email.com", vencimento: "05/02/2026", lastPayment: "05/01/2026", age: 28, weight: "85kg" },
-    { name: "Juliana Melo", ra: "2024001004", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 94567-8901", email: "juliana@email.com", vencimento: "20/03/2026", lastPayment: "20/02/2026", age: 22, weight: "55kg" },
-    { name: "Lucas Ferreira", ra: "2024001005", plan: "Basico", status: "inativo", payment: "em-dia", phone: "(11) 92345-6789", email: "lucas@email.com", vencimento: "-", lastPayment: "10/12/2025", age: 35, weight: "90kg" },
-    { name: "Ana Beatriz", ra: "2024001006", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 93456-7890", email: "anab@email.com", vencimento: "12/03/2026", lastPayment: "12/02/2026", age: 27, weight: "58kg" },
-    { name: "Bruno Alves", ra: "2024001007", plan: "Basico", status: "ativo", payment: "atrasado", phone: "(11) 95678-1234", email: "bruno@email.com", vencimento: "01/02/2026", lastPayment: "01/01/2026", age: 31, weight: "82kg" },
-    { name: "Camila Rocha", ra: "2024001008", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 96789-2345", email: "camila@email.com", vencimento: "18/03/2026", lastPayment: "18/02/2026", age: 24, weight: "60kg" },
-    { name: "Rafael Nunes", ra: "2024001009", plan: "Basico", status: "ativo", payment: "atrasado", phone: "(11) 97890-3456", email: "rafael@email.com", vencimento: "08/02/2026", lastPayment: "08/01/2026", age: 29, weight: "75kg" },
+    { name: "Maria Silva", cpf: "123.456.789-01", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 98765-4321", email: "maria@email.com", vencimento: "10/03/2026", lastPayment: "10/02/2026", age: 25, weight: "62kg" },
+    { name: "Carlos Santos", cpf: "234.567.890-12", plan: "Basico", status: "ativo", payment: "em-dia", phone: "(11) 91234-5678", email: "carlos@email.com", vencimento: "15/03/2026", lastPayment: "15/02/2026", age: 30, weight: "78kg" },
+    { name: "Pedro Costa", cpf: "345.678.901-23", plan: "Premium", status: "ativo", payment: "atrasado", phone: "(11) 99876-1234", email: "pedro@email.com", vencimento: "05/02/2026", lastPayment: "05/01/2026", age: 28, weight: "85kg" },
+    { name: "Juliana Melo", cpf: "456.789.012-34", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 94567-8901", email: "juliana@email.com", vencimento: "20/03/2026", lastPayment: "20/02/2026", age: 22, weight: "55kg" },
+    { name: "Lucas Ferreira", cpf: "567.890.123-45", plan: "Basico", status: "inativo", payment: "em-dia", phone: "(11) 92345-6789", email: "lucas@email.com", vencimento: "-", lastPayment: "10/12/2025", age: 35, weight: "90kg" },
+    { name: "Ana Beatriz", cpf: "678.901.234-56", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 93456-7890", email: "anab@email.com", vencimento: "12/03/2026", lastPayment: "12/02/2026", age: 27, weight: "58kg" },
+    { name: "Bruno Alves", cpf: "789.012.345-67", plan: "Basico", status: "ativo", payment: "atrasado", phone: "(11) 95678-1234", email: "bruno@email.com", vencimento: "01/02/2026", lastPayment: "01/01/2026", age: 31, weight: "82kg" },
+    { name: "Camila Rocha", cpf: "890.123.456-78", plan: "Premium", status: "ativo", payment: "em-dia", phone: "(11) 96789-2345", email: "camila@email.com", vencimento: "18/03/2026", lastPayment: "18/02/2026", age: 24, weight: "60kg" },
+    { name: "Rafael Nunes", cpf: "901.234.567-89", plan: "Basico", status: "ativo", payment: "atrasado", phone: "(11) 97890-3456", email: "rafael@email.com", vencimento: "08/02/2026", lastPayment: "08/01/2026", age: 29, weight: "75kg" },
   ]
 
-  const allProfessors: Professor[] = [
-    { name: "Prof. Ana Lima", ra: "P2024001", speciality: "Musculacao", students: 45, status: "ativo", phone: "(11) 91111-2222", email: "ana.lima@fitpro.com", horario: "06:00 - 14:00", salario: "R$ 4.500,00", modalidades: ["Musculacao", "Funcional"] },
-    { name: "Prof. Ricardo Souza", ra: "P2024002", speciality: "Funcional", students: 32, status: "ativo", phone: "(11) 93333-4444", email: "ricardo@fitpro.com", horario: "07:00 - 15:00", salario: "R$ 4.200,00", modalidades: ["Funcional", "Crossfit"] },
-    { name: "Prof. Fernanda Costa", ra: "P2024003", speciality: "Crossfit", students: 28, status: "ativo", phone: "(11) 95555-6666", email: "fernanda@fitpro.com", horario: "08:00 - 16:00", salario: "R$ 4.800,00", modalidades: ["Crossfit", "HIIT"] },
-    { name: "Prof. Marcos Oliveira", ra: "P2024004", speciality: "Personal", students: 15, status: "ativo", phone: "(11) 97777-8888", email: "marcos@fitpro.com", horario: "10:00 - 18:00", salario: "R$ 5.200,00", modalidades: ["Personal", "Musculacao"] },
-    { name: "Prof. Julia Santos", ra: "P2024005", speciality: "Pilates", students: 22, status: "ferias", phone: "(11) 99999-0000", email: "julia@fitpro.com", horario: "07:00 - 15:00", salario: "R$ 3.800,00", modalidades: ["Pilates", "Yoga"] },
-    { name: "Prof. Thiago Reis", ra: "P2024006", speciality: "Natacao", students: 18, status: "ativo", phone: "(11) 92222-3333", email: "thiago@fitpro.com", horario: "06:00 - 14:00", salario: "R$ 4.000,00", modalidades: ["Natacao", "Hidroginastica"] },
-  ]
+  const [allProfessors, setAllProfessors] = useState<Professor[]>([
+    { name: "Prof. Ana Lima", cpf: "111.222.333-44", speciality: "Musculacao", students: 45, status: "ativo", phone: "(11) 91111-2222", email: "ana.lima@fitpro.com", horario: "06:00 - 14:00", salario: "R$ 4.500,00", modalidades: ["Musculacao", "Funcional"] },
+    { name: "Prof. Ricardo Souza", cpf: "222.333.444-55", speciality: "Funcional", students: 32, status: "ativo", phone: "(11) 93333-4444", email: "ricardo@fitpro.com", horario: "07:00 - 15:00", salario: "R$ 4.200,00", modalidades: ["Funcional", "Crossfit"] },
+    { name: "Prof. Fernanda Costa", cpf: "333.444.555-66", speciality: "Crossfit", students: 28, status: "ativo", phone: "(11) 95555-6666", email: "fernanda@fitpro.com", horario: "08:00 - 16:00", salario: "R$ 4.800,00", modalidades: ["Crossfit", "HIIT"] },
+    { name: "Prof. Marcos Oliveira", cpf: "444.555.666-77", speciality: "Personal", students: 15, status: "ativo", phone: "(11) 97777-8888", email: "marcos@fitpro.com", horario: "10:00 - 18:00", salario: "R$ 5.200,00", modalidades: ["Personal", "Musculacao"] },
+    { name: "Prof. Julia Santos", cpf: "555.666.777-88", speciality: "Pilates", students: 22, status: "ferias", phone: "(11) 99999-0000", email: "julia@fitpro.com", horario: "07:00 - 15:00", salario: "R$ 3.800,00", modalidades: ["Pilates", "Yoga"], feriasPendente: true, feriasInicioSolicitado: "2026-04-01", feriasFimSolicitado: "2026-04-30" },
+    { name: "Prof. Thiago Reis", cpf: "666.777.888-99", speciality: "Natacao", students: 18, status: "ativo", phone: "(11) 92222-3333", email: "thiago@fitpro.com", horario: "06:00 - 14:00", salario: "R$ 4.000,00", modalidades: ["Natacao", "Hidroginastica"] },
+  ])
 
   const financialData = [
     { month: "Fevereiro 2026", receita: "R$ 45.800", despesas: "R$ 28.200", lucro: "R$ 17.600", status: "positivo" },
@@ -163,17 +226,30 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
     { month: "Outubro 2025", receita: "R$ 39.800", despesas: "R$ 30.100", lucro: "R$ 9.700", status: "positivo" },
   ]
 
-  const agendaToday = [
-    { time: "06:00", event: "Musculacao - Turma A", professor: "Prof. Ana Lima", room: "Sala 1", id: "a1" },
-    { time: "07:00", event: "Funcional", professor: "Prof. Ricardo Souza", room: "Area Externa", id: "a2" },
-    { time: "08:00", event: "Musculacao - Turma B", professor: "Prof. Ana Lima", room: "Sala 1", id: "a3" },
-    { time: "09:00", event: "Pilates", professor: "Prof. Julia Santos", room: "Sala 2", id: "a4" },
-    { time: "10:00", event: "Crossfit", professor: "Prof. Fernanda Costa", room: "Box", id: "a5" },
-    { time: "14:00", event: "Personal Training", professor: "Prof. Marcos Oliveira", room: "Sala 3", id: "a6" },
-    { time: "16:00", event: "Natacao", professor: "Prof. Thiago Reis", room: "Piscina", id: "a7" },
-    { time: "18:00", event: "Musculacao - Turma C", professor: "Prof. Ana Lima", room: "Sala 1", id: "a8" },
-    { time: "19:00", event: "Crossfit Noturno", professor: "Prof. Fernanda Costa", room: "Box", id: "a9" },
+  const extratoData: ExtratoItem[] = [
+    { id: "e1", date: "03/03/2026", description: "Mensalidade - Maria Silva", category: "Mensalidade", type: "receita", value: "R$ 120,00", valueNum: 120 },
+    { id: "e2", date: "03/03/2026", description: "Conta de energia eletrica", category: "Energia", type: "despesa", value: "R$ 2.850,00", valueNum: -2850 },
+    { id: "e3", date: "02/03/2026", description: "Mensalidade - Carlos Santos", category: "Mensalidade", type: "receita", value: "R$ 80,00", valueNum: 80 },
+    { id: "e4", date: "02/03/2026", description: "Mensalidade - Juliana Melo", category: "Mensalidade", type: "receita", value: "R$ 120,00", valueNum: 120 },
+    { id: "e5", date: "01/03/2026", description: "Salarios - Fevereiro", category: "Salarios", type: "despesa", value: "R$ 18.500,00", valueNum: -18500 },
+    { id: "e6", date: "01/03/2026", description: "Manutencao equipamentos", category: "Manutencao", type: "despesa", value: "R$ 1.200,00", valueNum: -1200 },
+    { id: "e7", date: "28/02/2026", description: "Mensalidade - Ana Beatriz", category: "Mensalidade", type: "receita", value: "R$ 120,00", valueNum: 120 },
+    { id: "e8", date: "28/02/2026", description: "Matricula - Novo aluno", category: "Matricula", type: "receita", value: "R$ 50,00", valueNum: 50 },
+    { id: "e9", date: "27/02/2026", description: "Aluguel mensal", category: "Aluguel", type: "despesa", value: "R$ 5.500,00", valueNum: -5500 },
+    { id: "e10", date: "27/02/2026", description: "Personal - Sessao avulsa", category: "Personal", type: "receita", value: "R$ 80,00", valueNum: 80 },
+    { id: "e11", date: "26/02/2026", description: "Conta de agua", category: "Agua", type: "despesa", value: "R$ 680,00", valueNum: -680 },
+    { id: "e12", date: "25/02/2026", description: "Venda suplementos", category: "Loja", type: "receita", value: "R$ 350,00", valueNum: 350 },
   ]
+
+  const [extratoFilter, setExtratoFilter] = useState<"todos" | "receita" | "despesa">("todos")
+
+  const filteredExtrato = extratoData.filter((item) => {
+    if (extratoFilter === "todos") return true
+    return item.type === extratoFilter
+  })
+
+  const totalReceitas = extratoData.filter(e => e.type === "receita").reduce((sum, e) => sum + e.valueNum, 0)
+  const totalDespesas = extratoData.filter(e => e.type === "despesa").reduce((sum, e) => sum + Math.abs(e.valueNum), 0)
 
   const reports = [
     { title: "Frequencia Mensal", description: "Taxa de presenca dos alunos em Fevereiro", value: "78%", trend: "+3%" },
@@ -185,10 +261,10 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   ]
 
   const plans: Plan[] = [
-    { id: "1", name: "Plano Basico", price: "R$ 80,00", duration: "Mensal", features: ["Musculacao", "Vestiario"], active: true },
-    { id: "2", name: "Plano Premium", price: "R$ 120,00", duration: "Mensal", features: ["Musculacao", "Funcional", "Vestiario", "Armario"], active: true },
-    { id: "3", name: "Plano VIP", price: "R$ 200,00", duration: "Mensal", features: ["Todas as modalidades", "Personal 2x/semana", "Vestiario VIP", "Armario", "Suplementos"], active: true },
-    { id: "4", name: "Plano Trimestral", price: "R$ 300,00", duration: "Trimestral", features: ["Musculacao", "Funcional", "Vestiario", "Armario"], active: true },
+    { id: "1", name: "Plano Basico", price: "R$ 80,00", duration: "Mensal", modalidades: ["Musculacao"], extras: ["Vestiario"], active: true },
+    { id: "2", name: "Plano Premium", price: "R$ 120,00", duration: "Mensal", modalidades: ["Musculacao", "Funcional"], extras: ["Vestiario", "Armario"], active: true },
+    { id: "3", name: "Plano VIP", price: "R$ 200,00", duration: "Mensal", modalidades: ["Musculacao", "Funcional", "Crossfit", "Pilates", "Natacao", "HIIT", "Yoga"], extras: ["Vestiario", "Armario", "Suplementos", "Avaliacao Fisica"], active: true },
+    { id: "4", name: "Plano Trimestral", price: "R$ 300,00", duration: "Trimestral", modalidades: ["Musculacao", "Funcional"], extras: ["Vestiario", "Armario"], active: true },
   ]
 
   const quickActions = [
@@ -201,7 +277,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   ]
 
   const filteredStudents = allStudents.filter((s) => {
-    const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.ra.includes(searchQuery)
+    const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.cpf.includes(searchQuery)
     if (studentFilter === "todos") return matchSearch
     if (studentFilter === "em-dia") return matchSearch && s.payment === "em-dia" && s.status === "ativo"
     if (studentFilter === "atrasado") return matchSearch && s.payment === "atrasado"
@@ -210,10 +286,70 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
   })
 
   const filteredProfessors = allProfessors.filter(
-    (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.ra.includes(searchQuery)
+    (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.cpf.includes(searchQuery)
   )
 
   const atrasados = allStudents.filter((s) => s.payment === "atrasado").length
+
+  const handleCancelAula = () => {
+    if (selectedCancelAula) {
+      setAgendaItems((prev) => prev.filter((item) => item.id !== selectedCancelAula))
+      setSelectedCancelAula(null)
+      setAgendaDialog(null)
+    }
+  }
+
+  const handleSaveProfessor = () => {
+    if (editProfData) {
+      setAllProfessors((prev) =>
+        prev.map((p) => (p.cpf === editProfData.cpf ? editProfData : p))
+      )
+      setSelectedProfessor(editProfData)
+      setEditingProfessor(false)
+    }
+  }
+
+  const handleFeriasAction = () => {
+    if (!selectedProfessor) return
+    if (feriasAction === "aprovar") {
+      setAllProfessors((prev) =>
+        prev.map((p) =>
+          p.cpf === selectedProfessor.cpf
+            ? { ...p, status: "ferias", feriasPendente: false, feriasInicio: p.feriasInicioSolicitado, feriasFim: p.feriasFimSolicitado }
+            : p
+        )
+      )
+    } else if (feriasAction === "reprovar") {
+      setAllProfessors((prev) =>
+        prev.map((p) =>
+          p.cpf === selectedProfessor.cpf
+            ? { ...p, feriasPendente: false, feriasInicioSolicitado: undefined, feriasFimSolicitado: undefined }
+            : p
+        )
+      )
+    } else if (feriasAction === "realocar" && feriasNewStart && feriasNewEnd) {
+      setAllProfessors((prev) =>
+        prev.map((p) =>
+          p.cpf === selectedProfessor.cpf
+            ? { ...p, status: "ferias", feriasPendente: false, feriasInicio: feriasNewStart, feriasFim: feriasNewEnd, feriasInicioSolicitado: undefined, feriasFimSolicitado: undefined }
+            : p
+        )
+      )
+    }
+    setShowFeriasDialog(false)
+    setFeriasAction(null)
+    setFeriasNewStart("")
+    setFeriasNewEnd("")
+    setShowProfessorModal(false)
+  }
+
+  const togglePlanModalidade = (m: string) => {
+    setNewPlanModalidades((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m])
+  }
+
+  const togglePlanExtra = (e: string) => {
+    setNewPlanExtras((prev) => prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e])
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,7 +372,6 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
-        {/* Header + Novo Aluno button */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold font-mono text-foreground">
@@ -255,7 +390,6 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
           </Button>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
             <Card key={stat.label} className="border-border bg-card">
@@ -275,7 +409,6 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
           ))}
         </div>
 
-        {/* Alerts Card */}
         <Card className="mt-6 border-border bg-card">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-foreground font-mono text-base">
@@ -329,7 +462,6 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
           </CardContent>
         </Card>
 
-        {/* Activity + Quick Actions */}
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <Card className="border-border bg-card lg:col-span-2">
             <CardHeader>
@@ -402,14 +534,13 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou RA..."
+                placeholder="Buscar por nome ou CPF..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
               />
             </div>
 
-            {/* Filter buttons */}
             <div className="mb-4 flex flex-wrap gap-2">
               {([
                 { key: "todos" as StudentFilter, label: "Todos", count: allStudents.length },
@@ -446,7 +577,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{student.name}</p>
-                      <p className="text-xs text-muted-foreground">RA: {student.ra}</p>
+                      <p className="text-xs text-muted-foreground">CPF: {student.cpf}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <Badge variant="outline" className="text-xs border-primary/30 text-primary">{student.plan}</Badge>
@@ -498,7 +629,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
               {filteredProfessors.map((prof, i) => (
                 <button
                   key={i}
-                  onClick={() => { setSelectedProfessor(prof); setShowProfessorModal(true) }}
+                  onClick={() => { setSelectedProfessor(prof); setShowProfessorModal(true); setEditingProfessor(false) }}
                   className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-3 text-left transition-colors hover:border-primary/30"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[oklch(0.55_0.15_250)]/20 text-xs font-semibold text-[oklch(0.65_0.18_250)]">
@@ -508,16 +639,21 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                     <p className="text-sm font-medium text-foreground">{prof.name}</p>
                     <p className="text-xs text-muted-foreground">{prof.speciality} - {prof.students} alunos</p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={
-                      prof.status === "ativo"
-                        ? "border-primary/30 text-primary"
-                        : "border-[oklch(0.75_0.15_85)]/30 text-[oklch(0.75_0.15_85)]"
-                    }
-                  >
-                    {prof.status === "ativo" ? "Ativo" : "Ferias"}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge
+                      variant="outline"
+                      className={
+                        prof.status === "ativo"
+                          ? "border-primary/30 text-primary"
+                          : "border-[oklch(0.75_0.15_85)]/30 text-[oklch(0.75_0.15_85)]"
+                      }
+                    >
+                      {prof.status === "ativo" ? "Ativo" : "Ferias"}
+                    </Badge>
+                    {prof.feriasPendente && (
+                      <span className="text-xs text-[oklch(0.75_0.15_85)]">Ferias pendente</span>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
@@ -530,7 +666,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
         <SheetContent className="w-full sm:max-w-lg bg-card border-border overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-foreground font-mono">Financeiro</SheetTitle>
-            <SheetDescription>Resumo financeiro dos ultimos meses</SheetDescription>
+            <SheetDescription>Resumo financeiro e extrato</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
             <div className="mb-4 flex gap-2">
@@ -551,37 +687,127 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
               </Button>
             </div>
 
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-primary/10 p-3">
-                <p className="text-xs text-muted-foreground">Receita (Fev)</p>
-                <p className="text-lg font-semibold font-mono text-primary">R$ 45.8k</p>
-              </div>
-              <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground">Lucro (Fev)</p>
-                <p className="text-lg font-semibold font-mono text-foreground">R$ 17.6k</p>
-              </div>
+            {/* Finance tabs */}
+            <div className="mb-4 flex rounded-lg bg-secondary p-1">
+              <button
+                onClick={() => setFinanceTab("resumo")}
+                className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                  financeTab === "resumo" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Resumo
+              </button>
+              <button
+                onClick={() => setFinanceTab("extrato")}
+                className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                  financeTab === "extrato" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Extrato
+              </button>
             </div>
-            <div className="flex flex-col gap-3">
-              {financialData.map((item, i) => (
-                <div key={i} className="rounded-lg border border-border bg-secondary p-3">
-                  <p className="text-sm font-medium text-foreground mb-2">{item.month}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Receita</p>
-                      <p className="text-sm font-mono text-primary">{item.receita}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Despesas</p>
-                      <p className="text-sm font-mono text-foreground">{item.despesas}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Lucro</p>
-                      <p className="text-sm font-mono text-primary">{item.lucro}</p>
-                    </div>
+
+            {financeTab === "resumo" && (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-primary/10 p-3">
+                    <p className="text-xs text-muted-foreground">Receita (Fev)</p>
+                    <p className="text-lg font-semibold font-mono text-primary">R$ 45.8k</p>
+                  </div>
+                  <div className="rounded-lg bg-secondary p-3">
+                    <p className="text-xs text-muted-foreground">Lucro (Fev)</p>
+                    <p className="text-lg font-semibold font-mono text-foreground">R$ 17.6k</p>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex flex-col gap-3">
+                  {financialData.map((item, i) => (
+                    <div key={i} className="rounded-lg border border-border bg-secondary p-3">
+                      <p className="text-sm font-medium text-foreground mb-2">{item.month}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Receita</p>
+                          <p className="text-sm font-mono text-primary">{item.receita}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Despesas</p>
+                          <p className="text-sm font-mono text-foreground">{item.despesas}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Lucro</p>
+                          <p className="text-sm font-mono text-primary">{item.lucro}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {financeTab === "extrato" && (
+              <>
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-primary/10 p-2.5 text-center">
+                    <p className="text-xs text-muted-foreground">Receitas</p>
+                    <p className="text-sm font-semibold font-mono text-primary">R$ {totalReceitas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="rounded-lg bg-destructive/10 p-2.5 text-center">
+                    <p className="text-xs text-muted-foreground">Despesas</p>
+                    <p className="text-sm font-semibold font-mono text-destructive">R$ {totalDespesas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="rounded-lg bg-secondary p-2.5 text-center">
+                    <p className="text-xs text-muted-foreground">Saldo</p>
+                    <p className={`text-sm font-semibold font-mono ${totalReceitas - totalDespesas >= 0 ? "text-primary" : "text-destructive"}`}>
+                      R$ {(totalReceitas - totalDespesas).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {(["todos", "receita", "despesa"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setExtratoFilter(f)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                        extratoFilter === f
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {f === "todos" ? "Todos" : f === "receita" ? "Receitas" : "Despesas"}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {filteredExtrato.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-3">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        item.type === "receita" ? "bg-primary/10" : "bg-destructive/10"
+                      }`}>
+                        {item.type === "receita" ? (
+                          <ArrowUpRight className="h-4 w-4 text-primary" />
+                        ) : (
+                          <ArrowDownRight className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{item.description}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{item.date}</span>
+                          <span className="text-xs text-muted-foreground">-</span>
+                          <span className="text-xs text-muted-foreground">{item.category}</span>
+                        </div>
+                      </div>
+                      <p className={`text-sm font-mono font-medium ${
+                        item.type === "receita" ? "text-primary" : "text-destructive"
+                      }`}>
+                        {item.type === "receita" ? "+" : "-"}{item.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>
@@ -591,7 +817,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
         <SheetContent className="w-full sm:max-w-lg bg-card border-border overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-foreground font-mono">Agenda de Hoje</SheetTitle>
-            <SheetDescription>{agendaToday.length} atividades programadas</SheetDescription>
+            <SheetDescription>{agendaItems.length} atividades programadas</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
             <div className="mb-4 flex gap-2">
@@ -603,7 +829,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 Criar Nova Turma
               </Button>
               <Button
-                onClick={() => setAgendaDialog("cancelar-aula")}
+                onClick={() => { setAgendaDialog("cancelar-aula"); setSelectedCancelAula(null) }}
                 variant="outline"
                 className="flex-1 border-border text-foreground hover:bg-secondary gap-2 text-xs"
               >
@@ -613,20 +839,24 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
             </div>
 
             <div className="flex flex-col gap-3">
-              {agendaToday.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Clock className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-primary">{item.time}</span>
-                      <span className="text-sm font-medium text-foreground">{item.event}</span>
+              {agendaItems.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma aula programada para hoje.</p>
+              ) : (
+                agendaItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Clock className="h-4 w-4 text-primary" />
                     </div>
-                    <p className="text-xs text-muted-foreground">{item.professor} - {item.room}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-medium text-primary">{item.time}</span>
+                        <span className="text-sm font-medium text-foreground">{item.event}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{item.professor} - {item.room}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </SheetContent>
@@ -673,7 +903,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
           </SheetHeader>
           <div className="px-4 pb-4">
             <Button
-              onClick={() => setShowAddPlanDialog(true)}
+              onClick={() => { setShowAddPlanDialog(true); setNewPlanModalidades([]); setNewPlanExtras([]) }}
               className="mb-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -695,12 +925,25 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {plan.features.map((f, j) => (
-                      <span key={j} className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary">
-                        {f}
-                      </span>
-                    ))}
+                  <div className="mb-2">
+                    <p className="text-xs text-muted-foreground mb-1.5">Modalidades</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {plan.modalidades.map((m, j) => (
+                        <span key={j} className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-xs text-muted-foreground mb-1.5">Extras</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {plan.extras.map((e, j) => (
+                        <span key={j} className="rounded-full bg-secondary border border-border px-2.5 py-0.5 text-xs text-muted-foreground">
+                          {e}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex gap-2 mt-3">
                     <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground gap-1">
@@ -734,7 +977,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 </div>
                 <div>
                   <p className="text-base font-medium text-foreground">{selectedStudent.name}</p>
-                  <p className="text-sm text-muted-foreground">RA: {selectedStudent.ra}</p>
+                  <p className="text-sm text-muted-foreground">CPF: {selectedStudent.cpf}</p>
                 </div>
               </div>
 
@@ -791,9 +1034,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
 
               <DialogFooter className="flex gap-2 sm:gap-2">
                 <Button
-                  onClick={() => {
-                    setShowPaymentDialog(true)
-                  }}
+                  onClick={() => setShowPaymentDialog(true)}
                   className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
                 >
                   <CreditCard className="h-4 w-4" />
@@ -810,13 +1051,17 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
       </Dialog>
 
       {/* ==================== MODAL: Perfil do Professor ==================== */}
-      <Dialog open={showProfessorModal} onOpenChange={setShowProfessorModal}>
-        <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
+      <Dialog open={showProfessorModal} onOpenChange={(open) => { setShowProfessorModal(open); if (!open) setEditingProfessor(false) }}>
+        <DialogContent className="bg-card border-border text-foreground sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-mono text-foreground">Perfil do Professor</DialogTitle>
-            <DialogDescription>Informacoes detalhadas do professor</DialogDescription>
+            <DialogTitle className="font-mono text-foreground">
+              {editingProfessor ? "Editar Professor" : "Perfil do Professor"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingProfessor ? "Altere as informacoes do professor" : "Informacoes detalhadas do professor"}
+            </DialogDescription>
           </DialogHeader>
-          {selectedProfessor && (
+          {selectedProfessor && !editingProfessor && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[oklch(0.55_0.15_250)]/20 text-base font-semibold text-[oklch(0.65_0.18_250)]">
@@ -824,7 +1069,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 </div>
                 <div>
                   <p className="text-base font-medium text-foreground">{selectedProfessor.name}</p>
-                  <p className="text-sm text-muted-foreground">RA: {selectedProfessor.ra}</p>
+                  <p className="text-sm text-muted-foreground">CPF: {selectedProfessor.cpf}</p>
                 </div>
               </div>
 
@@ -889,10 +1134,207 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 </div>
               </div>
 
+              {selectedProfessor.feriasPendente && (
+                <div className="rounded-lg border border-[oklch(0.75_0.15_85)]/30 bg-[oklch(0.75_0.15_85)]/10 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarDays className="h-4 w-4 text-[oklch(0.75_0.15_85)]" />
+                    <p className="text-sm font-medium text-foreground">Solicitacao de Ferias</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Periodo solicitado: {selectedProfessor.feriasInicioSolicitado} a {selectedProfessor.feriasFimSolicitado}
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+                <div className="flex gap-2 w-full">
+                  <Button
+                    onClick={() => {
+                      setEditProfData({ ...selectedProfessor })
+                      setEditingProfessor(true)
+                    }}
+                    variant="outline"
+                    className="flex-1 border-border text-foreground hover:bg-secondary gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Editar Informacoes
+                  </Button>
+                  <Button
+                    onClick={() => setShowFeriasDialog(true)}
+                    variant="outline"
+                    className="flex-1 border-[oklch(0.75_0.15_85)]/30 text-[oklch(0.75_0.15_85)] hover:bg-[oklch(0.75_0.15_85)]/10 gap-2"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Gerenciar Ferias
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          )}
+          {selectedProfessor && editingProfessor && editProfData && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Nome</Label>
+                  <Input
+                    value={editProfData.name}
+                    onChange={(e) => setEditProfData({ ...editProfData, name: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Telefone</Label>
+                  <Input
+                    value={editProfData.phone}
+                    onChange={(e) => setEditProfData({ ...editProfData, phone: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Email</Label>
+                  <Input
+                    value={editProfData.email}
+                    onChange={(e) => setEditProfData({ ...editProfData, email: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Horario</Label>
+                  <Input
+                    value={editProfData.horario}
+                    onChange={(e) => setEditProfData({ ...editProfData, horario: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Salario</Label>
+                  <Input
+                    value={editProfData.salario}
+                    onChange={(e) => setEditProfData({ ...editProfData, salario: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <Label className="text-foreground text-xs">Especialidade</Label>
+                  <Input
+                    value={editProfData.speciality}
+                    onChange={(e) => setEditProfData({ ...editProfData, speciality: e.target.value })}
+                    className="bg-secondary border-border text-foreground"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="flex gap-2 sm:gap-2">
+                <Button variant="outline" onClick={() => setEditingProfessor(false)} className="border-border text-foreground hover:bg-secondary">
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveProfessor} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  Salvar Alteracoes
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== MODAL: Gerenciar Ferias ==================== */}
+      <Dialog open={showFeriasDialog} onOpenChange={setShowFeriasDialog}>
+        <DialogContent className="bg-card border-border text-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-foreground">Gerenciar Ferias</DialogTitle>
+            <DialogDescription>
+              {selectedProfessor ? `Ferias de ${selectedProfessor.name}` : "Gerenciar ferias"}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedProfessor && (
+            <div className="flex flex-col gap-4">
+              {selectedProfessor.feriasPendente && (
+                <div className="rounded-lg border border-[oklch(0.75_0.15_85)]/30 bg-[oklch(0.75_0.15_85)]/10 p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Periodo solicitado:</p>
+                  <p className="text-sm text-foreground">
+                    {selectedProfessor.feriasInicioSolicitado} a {selectedProfessor.feriasFimSolicitado}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">Escolha uma acao:</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setFeriasAction("aprovar")}
+                    className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      feriasAction === "aprovar" ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/30"
+                    }`}
+                  >
+                    <CheckCircle2 className={`h-5 w-5 ${feriasAction === "aprovar" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Aprovar Ferias</p>
+                      <p className="text-xs text-muted-foreground">Confirmar o periodo solicitado</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setFeriasAction("reprovar")}
+                    className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      feriasAction === "reprovar" ? "border-destructive bg-destructive/10" : "border-border bg-secondary hover:border-destructive/30"
+                    }`}
+                  >
+                    <XCircle className={`h-5 w-5 ${feriasAction === "reprovar" ? "text-destructive" : "text-muted-foreground"}`} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Reprovar Ferias</p>
+                      <p className="text-xs text-muted-foreground">Rejeitar a solicitacao</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setFeriasAction("realocar")}
+                    className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      feriasAction === "realocar" ? "border-[oklch(0.75_0.15_85)] bg-[oklch(0.75_0.15_85)]/10" : "border-border bg-secondary hover:border-[oklch(0.75_0.15_85)]/30"
+                    }`}
+                  >
+                    <CalendarDays className={`h-5 w-5 ${feriasAction === "realocar" ? "text-[oklch(0.75_0.15_85)]" : "text-muted-foreground"}`} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Realocar Ferias</p>
+                      <p className="text-xs text-muted-foreground">Definir um novo periodo</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {feriasAction === "realocar" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-foreground text-xs">Inicio</Label>
+                    <Input
+                      type="date"
+                      value={feriasNewStart}
+                      onChange={(e) => setFeriasNewStart(e.target.value)}
+                      className="bg-secondary border-border text-foreground"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-foreground text-xs">Fim</Label>
+                    <Input
+                      type="date"
+                      value={feriasNewEnd}
+                      onChange={(e) => setFeriasNewEnd(e.target.value)}
+                      className="bg-secondary border-border text-foreground"
+                    />
+                  </div>
+                </div>
+              )}
+
               <DialogFooter>
-                <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary gap-2">
-                  <Edit className="h-4 w-4" />
-                  Editar Informacoes
+                <Button variant="outline" onClick={() => { setShowFeriasDialog(false); setFeriasAction(null) }} className="border-border text-foreground hover:bg-secondary">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleFeriasAction}
+                  disabled={!feriasAction || (feriasAction === "realocar" && (!feriasNewStart || !feriasNewEnd))}
+                  className={
+                    feriasAction === "reprovar"
+                      ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  }
+                >
+                  Confirmar
                 </Button>
               </DialogFooter>
             </div>
@@ -914,8 +1356,8 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 <Input placeholder="Nome do aluno" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-foreground text-xs">RA</Label>
-                <Input placeholder="2024001XXX" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
+                <Label className="text-foreground text-xs">CPF</Label>
+                <Input placeholder="000.000.000-00" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-foreground text-xs">Telefone</Label>
@@ -973,8 +1415,8 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 <Input placeholder="Nome do professor" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-foreground text-xs">RA</Label>
-                <Input placeholder="P2024XXX" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
+                <Label className="text-foreground text-xs">CPF</Label>
+                <Input placeholder="000.000.000-00" className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-foreground text-xs">Telefone</Label>
@@ -999,7 +1441,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    {["Musculacao", "Funcional", "Crossfit", "Personal", "Pilates", "Natacao", "HIIT", "Yoga", "Hidroginastica"].map((m) => (
+                    {ALL_MODALIDADES.map((m) => (
                       <SelectItem key={m} value={m} className="text-foreground">{m}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1132,7 +1574,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
       </Dialog>
 
       {/* ==================== MODAL: Criar Turma / Cancelar Aula ==================== */}
-      <Dialog open={agendaDialog !== null} onOpenChange={(open) => !open && setAgendaDialog(null)}>
+      <Dialog open={agendaDialog !== null} onOpenChange={(open) => { if (!open) { setAgendaDialog(null); setSelectedCancelAula(null) } }}>
         <DialogContent className="bg-card border-border text-foreground sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-mono text-foreground">
@@ -1156,7 +1598,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {allProfessors.filter(p => p.status === "ativo").map((p) => (
-                      <SelectItem key={p.ra} value={p.ra} className="text-foreground">{p.name}</SelectItem>
+                      <SelectItem key={p.cpf} value={p.cpf} className="text-foreground">{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1174,29 +1616,49 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
             </div>
           ) : (
             <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto">
-              {agendaToday.map((item) => (
-                <button
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-3 text-left transition-colors hover:border-destructive/30"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-primary">{item.time}</span>
-                      <span className="text-sm font-medium text-foreground">{item.event}</span>
+              {agendaItems.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma aula para cancelar.</p>
+              ) : (
+                agendaItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedCancelAula(item.id)}
+                    className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      selectedCancelAula === item.id
+                        ? "border-destructive bg-destructive/10"
+                        : "border-border bg-secondary hover:border-destructive/30"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-medium text-primary">{item.time}</span>
+                        <span className="text-sm font-medium text-foreground">{item.event}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{item.professor}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground">{item.professor}</p>
-                  </div>
-                  <XCircle className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive transition-colors" />
-                </button>
-              ))}
+                    {selectedCancelAula === item.id ? (
+                      <Check className="h-5 w-5 shrink-0 text-destructive" />
+                    ) : (
+                      <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAgendaDialog(null)} className="border-border text-foreground hover:bg-secondary">
+            <Button variant="outline" onClick={() => { setAgendaDialog(null); setSelectedCancelAula(null) }} className="border-border text-foreground hover:bg-secondary">
               Cancelar
             </Button>
             <Button
-              onClick={() => setAgendaDialog(null)}
+              onClick={() => {
+                if (agendaDialog === "cancelar-aula") {
+                  handleCancelAula()
+                } else {
+                  setAgendaDialog(null)
+                }
+              }}
+              disabled={agendaDialog === "cancelar-aula" && !selectedCancelAula}
               className={agendaDialog === "cancelar-aula"
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -1210,7 +1672,7 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
 
       {/* ==================== MODAL: Criar Plano ==================== */}
       <Dialog open={showAddPlanDialog} onOpenChange={setShowAddPlanDialog}>
-        <DialogContent className="bg-card border-border text-foreground sm:max-w-sm">
+        <DialogContent className="bg-card border-border text-foreground sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-mono text-foreground">Criar Novo Plano</DialogTitle>
             <DialogDescription>Defina os detalhes do novo plano</DialogDescription>
@@ -1240,9 +1702,59 @@ export function DashboardAdmin({ onLogout }: DashboardAdminProps) {
                 </Select>
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-foreground text-xs">Beneficios (separados por virgula)</Label>
-              <Input placeholder="Musculacao, Funcional, Vestiario..." className="bg-secondary border-border text-foreground placeholder:text-muted-foreground" />
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-foreground text-xs">Modalidades incluidas</Label>
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-secondary p-3">
+                {ALL_MODALIDADES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => togglePlanModalidade(m)}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                      newPlanModalidades.includes(m)
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      newPlanModalidades.includes(m)
+                        ? "border-primary bg-primary"
+                        : "border-border"
+                    }`}>
+                      {newPlanModalidades.includes(m) && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-foreground text-xs">Extras incluidos</Label>
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-secondary p-3">
+                {ALL_EXTRAS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => togglePlanExtra(e)}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                      newPlanExtras.includes(e)
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      newPlanExtras.includes(e)
+                        ? "border-primary bg-primary"
+                        : "border-border"
+                    }`}>
+                      {newPlanExtras.includes(e) && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    {e}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

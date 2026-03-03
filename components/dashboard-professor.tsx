@@ -62,7 +62,7 @@ interface EvolutionEntry {
 interface StudentData {
   id: string
   name: string
-  ra: string
+  cpf: string
   age: number
   weight: number
   height: number
@@ -109,7 +109,7 @@ function daysSince(dateStr: string): number {
 export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
   const [students, setStudents] = useState<StudentData[]>([
     {
-      id: "1", name: "Ana Costa", ra: "2024001001", age: 25, weight: 62, height: 165,
+      id: "1", name: "Ana Costa", cpf: "123.456.789-01", age: 25, weight: 62, height: 165,
       imc: calculateIMC(62, 165), goal: "hipertrofia",
       plan: JSON.parse(JSON.stringify(workoutPlans[0])),
       status: "ativo", trainingStatus: "ativo", startDate: "2025-01-15", lastPlanDate: "2026-01-20",
@@ -119,7 +119,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
       ],
     },
     {
-      id: "2", name: "Bruno Lima", ra: "2024001002", age: 30, weight: 95, height: 178,
+      id: "2", name: "Bruno Lima", cpf: "234.567.890-12", age: 30, weight: 95, height: 178,
       imc: calculateIMC(95, 178), goal: "emagrecimento",
       plan: JSON.parse(JSON.stringify(workoutPlans[1])),
       status: "ativo", trainingStatus: "vencendo", startDate: "2025-02-01", lastPlanDate: "2026-01-05",
@@ -129,7 +129,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
       ],
     },
     {
-      id: "3", name: "Carla Mota", ra: "2024001003", age: 22, weight: 55, height: 160,
+      id: "3", name: "Carla Mota", cpf: "345.678.901-23", age: 22, weight: 55, height: 160,
       imc: calculateIMC(55, 160), goal: "condicionamento",
       plan: JSON.parse(JSON.stringify(workoutPlans[2])),
       status: "ativo", trainingStatus: "ativo", startDate: "2025-01-20", lastPlanDate: "2026-02-15",
@@ -138,14 +138,14 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
       ],
     },
     {
-      id: "4", name: "Diego Reis", ra: "2024001004", age: 28, weight: 82, height: 175,
+      id: "4", name: "Diego Reis", cpf: "456.789.012-34", age: 28, weight: 82, height: 175,
       imc: calculateIMC(82, 175), goal: "",
       plan: null,
       status: "ativo", trainingStatus: "sem-treino", startDate: "2026-02-20", lastPlanDate: "",
       evolution: [],
     },
     {
-      id: "5", name: "Fernanda Souza", ra: "2024001005", age: 24, weight: 68, height: 170,
+      id: "5", name: "Fernanda Souza", cpf: "567.890.123-45", age: 24, weight: 68, height: 170,
       imc: calculateIMC(68, 170), goal: "",
       plan: null,
       status: "ativo", trainingStatus: "sem-treino", startDate: "2026-02-22", lastPlanDate: "",
@@ -378,7 +378,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
   const filteredStudents = students.filter(
     (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.ra.includes(searchQuery)
+      s.cpf.includes(searchQuery)
   )
 
   const getSwapExercises = () => {
@@ -558,7 +558,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar por nome ou RA..."
+                      placeholder="Buscar por nome ou CPF..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-9 h-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
@@ -591,7 +591,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                               <span className={`text-xs font-medium ${tsInfo.textColor} hidden sm:inline`}>{tsInfo.label}</span>
                             </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">RA: {student.ra}</p>
+                          <p className="text-xs text-muted-foreground">CPF: {student.cpf}</p>
                         </div>
                         <div className="hidden sm:flex flex-col items-end gap-1">
                           {student.plan && (
@@ -671,7 +671,7 @@ export function DashboardProfessor({ onLogout }: DashboardProfessorProps) {
                   </div>
                   {showStudentDetail.name}
                 </DialogTitle>
-                <DialogDescription>RA: {showStudentDetail.ra}</DialogDescription>
+                <DialogDescription>CPF: {showStudentDetail.cpf}</DialogDescription>
               </DialogHeader>
 
               {/* Student info grid */}

@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Dumbbell,
@@ -32,6 +33,17 @@ import {
   Scale,
   Copy,
   QrCode,
+  ArrowRight,
+  Lock,
+  Star,
+  Zap,
+  Award,
+  Heart,
+  Footprints,
+  Sunrise,
+  Moon,
+  Weight,
+  Repeat,
 } from "lucide-react"
 import { ExerciseAnimation } from "@/components/exercise-animation"
 
@@ -45,6 +57,18 @@ interface WorkoutExercise {
   weight: string
   done: boolean
   animationType: string
+}
+
+interface Achievement {
+  id: string
+  title: string
+  description: string
+  icon: React.ElementType
+  progress: number
+  maxProgress: number
+  unlocked: boolean
+  unlockedDate?: string
+  category: "consistencia" | "forca" | "evolucao"
 }
 
 // Rest timer component
@@ -129,7 +153,7 @@ function RestTimer({ onClose }: { onClose: () => void }) {
 }
 
 // PIX Payment Modal
-function PixModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function PixModal({ open, onClose, value }: { open: boolean; onClose: () => void; value: string }) {
   const [copied, setCopied] = useState(false)
   const pixKey = "studiobiofitness@pix.com.br"
 
@@ -150,7 +174,6 @@ function PixModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-5">
-          {/* Fake QR Code visual */}
           <div className="flex h-48 w-48 items-center justify-center rounded-2xl border-2 border-dashed border-primary/30 bg-secondary">
             <div className="flex flex-col items-center gap-2">
               <QrCode className="h-20 w-20 text-primary/60" strokeWidth={1} />
@@ -177,7 +200,7 @@ function PixModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 
           <div className="w-full rounded-lg bg-primary/10 p-3">
             <p className="text-xs text-muted-foreground mb-1">Valor da mensalidade</p>
-            <p className="text-xl font-semibold font-mono text-foreground">R$ 149,90</p>
+            <p className="text-xl font-semibold font-mono text-foreground">{value}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Apos o pagamento, envie o comprovante na recepcao para confirmacao.
             </p>
@@ -233,6 +256,41 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
   const [showRestTimer, setShowRestTimer] = useState(false)
   const [customWeights, setCustomWeights] = useState<Record<string, string>>({})
   const [showPixModal, setShowPixModal] = useState(false)
+  const [pixValue, setPixValue] = useState("R$ 149,90")
+
+  // Plan change state
+  const [currentPlan, setCurrentPlan] = useState("Premium")
+  const [currentPlanPrice] = useState("R$ 149,90")
+  const [planEndDate] = useState("05/04/2026")
+  const [showChangePlan, setShowChangePlan] = useState(false)
+  const [selectedNewPlan, setSelectedNewPlan] = useState<string | null>(null)
+  const [planChangeConfirmed, setPlanChangeConfirmed] = useState(false)
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null)
+
+  const availablePlans = [
+    { id: "basico", name: "Plano Basico", price: "R$ 80,00", modalidades: ["Musculacao"], extras: ["Vestiario"] },
+    { id: "premium", name: "Plano Premium", price: "R$ 149,90", modalidades: ["Musculacao", "Funcional"], extras: ["Vestiario", "Armario"] },
+    { id: "vip", name: "Plano VIP", price: "R$ 200,00", modalidades: ["Musculacao", "Funcional", "Crossfit", "Pilates", "Natacao", "HIIT", "Yoga"], extras: ["Vestiario", "Armario", "Suplementos", "Avaliacao Fisica"] },
+  ]
+
+  // Achievements state
+  const [showAchievements, setShowAchievements] = useState(false)
+  const achievements: Achievement[] = [
+    { id: "a1", title: "Primeiro Treino", description: "Complete seu primeiro treino na academia", icon: Zap, progress: 1, maxProgress: 1, unlocked: true, unlockedDate: "15/03/2025", category: "consistencia" },
+    { id: "a2", title: "7 Dias Seguidos", description: "Treine 7 dias consecutivos", icon: Flame, progress: 7, maxProgress: 7, unlocked: true, unlockedDate: "22/03/2025", category: "consistencia" },
+    { id: "a3", title: "30 Dias Seguidos", description: "Treine 30 dias consecutivos sem faltar", icon: Star, progress: 12, maxProgress: 30, unlocked: false, category: "consistencia" },
+    { id: "a4", title: "100 Treinos", description: "Complete 100 treinos no total", icon: Award, progress: 67, maxProgress: 100, unlocked: false, category: "consistencia" },
+    { id: "a5", title: "Levantador de Ferro", description: "Levante mais de 100kg no supino", icon: Weight, progress: 1, maxProgress: 1, unlocked: true, unlockedDate: "10/01/2026", category: "forca" },
+    { id: "a6", title: "Maratonista", description: "Complete 50 sessoes de cardio", icon: Footprints, progress: 32, maxProgress: 50, unlocked: false, category: "forca" },
+    { id: "a7", title: "Madrugador", description: "Treine 20 vezes antes das 7h", icon: Sunrise, progress: 20, maxProgress: 20, unlocked: true, unlockedDate: "05/02/2026", category: "consistencia" },
+    { id: "a8", title: "Coruja", description: "Treine 15 vezes apos as 21h", icon: Moon, progress: 8, maxProgress: 15, unlocked: false, category: "consistencia" },
+    { id: "a9", title: "Perdeu 5kg", description: "Perca 5kg desde o inicio", icon: TrendingDown, progress: 5.3, maxProgress: 5, unlocked: true, unlockedDate: "01/02/2026", category: "evolucao" },
+    { id: "a10", title: "Perdeu 10kg", description: "Perca 10kg desde o inicio", icon: TrendingDown, progress: 5.3, maxProgress: 10, unlocked: false, category: "evolucao" },
+    { id: "a11", title: "Consistente", description: "Nao falte nenhum treino por 2 semanas", icon: Repeat, progress: 2, maxProgress: 2, unlocked: true, unlockedDate: "28/02/2026", category: "consistencia" },
+    { id: "a12", title: "Coracaozao", description: "Frequencia cardiaca em zona ideal 30 vezes", icon: Heart, progress: 18, maxProgress: 30, unlocked: false, category: "evolucao" },
+  ]
+
+  const unlockedCount = achievements.filter((a) => a.unlocked).length
 
   // Body evolution state
   const [bodyWeights] = useState([
@@ -277,10 +335,28 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
     { month: "Setembro 2025", value: "R$ 139,90", status: "atrasado", date: "12/09/2025" },
   ]
 
-  // Next payment is near
   const nextPaymentDate = "05/03/2026"
-  const daysUntilPayment = 9 // mock
+  const daysUntilPayment = 9
   const paymentNear = daysUntilPayment <= 10
+
+  const handleConfirmPlanChange = () => {
+    if (selectedNewPlan) {
+      setPendingPlan(selectedNewPlan)
+      setPlanChangeConfirmed(true)
+      setShowChangePlan(false)
+      setSelectedNewPlan(null)
+    }
+  }
+
+  const handlePayNewPlan = () => {
+    if (pendingPlan) {
+      const plan = availablePlans.find((p) => p.id === pendingPlan)
+      if (plan) {
+        setPixValue(plan.price)
+        setShowPixModal(true)
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -317,7 +393,6 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
           {[
             { label: "Sequencia", value: "12 dias", icon: Flame, bgColor: "bg-[oklch(0.65_0.20_30)]/15", textColor: "text-[oklch(0.70_0.20_30)]" },
             { label: "Meta Semanal", value: "4/5", icon: Target, bgColor: "bg-primary/15", textColor: "text-primary" },
-            { label: "Conquistas", value: "8", icon: Trophy, bgColor: "bg-[oklch(0.75_0.15_85)]/15", textColor: "text-[oklch(0.75_0.15_85)]" },
           ].map((stat) => (
             <Card key={stat.label} className="border-border bg-card">
               <CardContent className="flex items-center gap-4 pt-6">
@@ -331,6 +406,23 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
               </CardContent>
             </Card>
           ))}
+
+          {/* Conquistas Card - Clickable */}
+          <Card
+            className="border-border bg-card cursor-pointer transition-colors hover:border-[oklch(0.75_0.15_85)]/40"
+            onClick={() => setShowAchievements(true)}
+          >
+            <CardContent className="flex items-center gap-4 pt-6">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.75_0.15_85)]/15">
+                <Trophy className="h-6 w-6 text-[oklch(0.75_0.15_85)]" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground">Conquistas</p>
+                <p className="text-2xl font-semibold font-mono text-foreground">{unlockedCount}/{achievements.length}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
 
           {/* Evolucao Corporal Card */}
           <Card className="border-border bg-card">
@@ -389,7 +481,7 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
           </Card>
         </div>
 
-        {/* Rest Timer - shows when exercise is marked complete */}
+        {/* Rest Timer */}
         {showRestTimer && (
           <div className="mt-6">
             <RestTimer onClose={() => setShowRestTimer(false)} />
@@ -460,7 +552,6 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                               <div className="mt-1 flex items-center gap-3">
                                 <span className="text-xs text-muted-foreground">{exercise.sets}</span>
                                 <span className="text-muted-foreground/40">|</span>
-                                {/* Editable weight field */}
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-xs text-muted-foreground">Carga:</span>
                                   <Input
@@ -509,7 +600,7 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Mensalidade Atual</p>
-                        <p className="text-2xl font-semibold font-mono text-foreground">R$ 149,90</p>
+                        <p className="text-2xl font-semibold font-mono text-foreground">{currentPlanPrice}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-start gap-2 sm:items-end">
@@ -530,10 +621,9 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                     </div>
                   </div>
 
-                  {/* PIX button - shows when near/overdue */}
                   {paymentNear && (
                     <Button
-                      onClick={() => setShowPixModal(true)}
+                      onClick={() => { setPixValue(currentPlanPrice); setShowPixModal(true) }}
                       className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
                     >
                       <QrCode className="mr-2 h-4 w-4" />
@@ -543,13 +633,13 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                 </CardContent>
               </Card>
 
-              {/* Plan info */}
+              {/* Plan info + Change plan */}
               <div className="grid gap-4 sm:grid-cols-3">
                 <Card className="border-border bg-card">
                   <CardContent className="flex flex-col items-center gap-2 pt-6 text-center">
                     <Dumbbell className="h-6 w-6 text-primary" />
                     <p className="text-xs text-muted-foreground">Plano</p>
-                    <p className="text-sm font-medium text-foreground">Premium</p>
+                    <p className="text-sm font-medium text-foreground">{currentPlan}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border bg-card">
@@ -568,7 +658,77 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                 </Card>
               </div>
 
-              {/* Body Evolution mini-chart */}
+              {/* Change plan section */}
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground font-mono">
+                    <ArrowRight className="h-5 w-5 text-primary" />
+                    Mudar Plano
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {pendingPlan && !planChangeConfirmed ? null : pendingPlan && planChangeConfirmed ? (
+                    <div className="flex flex-col gap-4">
+                      <div className="rounded-lg border border-[oklch(0.75_0.15_85)]/30 bg-[oklch(0.75_0.15_85)]/10 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="h-4 w-4 text-[oklch(0.75_0.15_85)]" />
+                          <p className="text-sm font-medium text-foreground">Troca de plano agendada</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Seu plano atual ({currentPlan}) termina em <span className="font-medium text-foreground">{planEndDate}</span>.
+                          O novo plano <span className="font-medium text-foreground">{availablePlans.find(p => p.id === pendingPlan)?.name}</span> sera
+                          ativado apos o termino do plano atual e confirmacao do pagamento.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handlePayNewPlan}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+                      >
+                        <QrCode className="h-4 w-4" />
+                        Pagar novo plano ({availablePlans.find(p => p.id === pendingPlan)?.price})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { setPendingPlan(null); setPlanChangeConfirmed(false) }}
+                        className="w-full border-border text-muted-foreground hover:text-foreground"
+                      >
+                        Cancelar troca
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        Escolha um novo plano. A mudanca sera implementada apos o termino do plano atual ({planEndDate}) e o pagamento.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {availablePlans.filter(p => p.name !== currentPlan).map((plan) => (
+                          <button
+                            key={plan.id}
+                            onClick={() => { setSelectedNewPlan(plan.id); setShowChangePlan(true) }}
+                            className="flex items-center gap-4 rounded-lg border border-border bg-secondary p-4 text-left transition-colors hover:border-primary/30"
+                          >
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-foreground">{plan.name}</p>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {plan.modalidades.map((m) => (
+                                  <span key={m} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{m}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-semibold font-mono text-foreground">{plan.price}</p>
+                              <p className="text-xs text-muted-foreground">/mes</p>
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Body Evolution */}
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground font-mono">
@@ -578,7 +738,6 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-4">
-                    {/* Mini progress bars as visual weight tracker */}
                     <div className="flex items-end gap-2">
                       {bodyWeights.map((entry, i) => {
                         const minW = Math.min(...bodyWeights.map((w) => w.weight))
@@ -669,7 +828,7 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
 
       {/* DIALOG: Exercise Animation */}
       <Dialog open={!!selectedExercise} onOpenChange={(open) => !open && setSelectedExercise(null)}>
-        <DialogContent className="bg-card border-border sm:max-w-md">
+        <DialogContent className="bg-card border-border sm:max-w-lg">
           {selectedExercise && (
             <>
               <DialogHeader>
@@ -679,10 +838,10 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col items-center gap-4">
-                <div className="relative flex h-56 w-56 items-center justify-center rounded-2xl bg-secondary">
+                <div className="relative flex h-72 w-full items-center justify-center rounded-2xl bg-secondary overflow-hidden">
                   <ExerciseAnimation
                     type={selectedExercise.animationType}
-                    className="h-48 w-48"
+                    className="h-64 w-64"
                   />
                 </div>
                 <div className="grid w-full grid-cols-2 gap-3">
@@ -711,8 +870,134 @@ export function DashboardStudent({ onLogout }: DashboardStudentProps) {
         </DialogContent>
       </Dialog>
 
+      {/* DIALOG: Confirmar Troca de Plano */}
+      <Dialog open={showChangePlan} onOpenChange={setShowChangePlan}>
+        <DialogContent className="bg-card border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-foreground font-mono">Confirmar Troca de Plano</DialogTitle>
+            <DialogDescription>
+              Voce esta mudando do plano {currentPlan} para {availablePlans.find(p => p.id === selectedNewPlan)?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedNewPlan && (
+            <div className="flex flex-col gap-4">
+              <div className="rounded-lg bg-secondary p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {availablePlans.find(p => p.id === selectedNewPlan)?.name}
+                  </p>
+                  <p className="text-lg font-semibold font-mono text-primary">
+                    {availablePlans.find(p => p.id === selectedNewPlan)?.price}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {availablePlans.find(p => p.id === selectedNewPlan)?.modalidades.map((m) => (
+                    <span key={m} className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary">{m}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[oklch(0.75_0.15_85)]/20 bg-[oklch(0.75_0.15_85)]/5 p-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  O novo plano sera ativado apos o termino do seu plano atual ({planEndDate}) e quando voce realizar o pagamento do novo plano.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangePlan(false)} className="border-border text-foreground hover:bg-secondary">
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmPlanChange} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Confirmar Troca
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: Conquistas */}
+      <Dialog open={showAchievements} onOpenChange={setShowAchievements}>
+        <DialogContent className="bg-card border-border sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-mono">
+              <Trophy className="h-5 w-5 text-[oklch(0.75_0.15_85)]" />
+              Minhas Conquistas
+            </DialogTitle>
+            <DialogDescription>
+              {unlockedCount} de {achievements.length} conquistas desbloqueadas
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Progress
+              value={(unlockedCount / achievements.length) * 100}
+              className="h-2 bg-secondary [&>div]:bg-[oklch(0.75_0.15_85)]"
+            />
+
+            {/* Category sections */}
+            {(["consistencia", "forca", "evolucao"] as const).map((cat) => {
+              const catAchievements = achievements.filter((a) => a.category === cat)
+              const catLabel = cat === "consistencia" ? "Consistencia" : cat === "forca" ? "Forca" : "Evolucao"
+              return (
+                <div key={cat} className="mt-4">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{catLabel}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {catAchievements.map((achievement) => (
+                      <div
+                        key={achievement.id}
+                        className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                          achievement.unlocked
+                            ? "border-[oklch(0.75_0.15_85)]/30 bg-[oklch(0.75_0.15_85)]/5"
+                            : "border-border bg-secondary opacity-70"
+                        }`}
+                      >
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                          achievement.unlocked
+                            ? "bg-[oklch(0.75_0.15_85)]/20"
+                            : "bg-muted"
+                        }`}>
+                          {achievement.unlocked ? (
+                            <achievement.icon className="h-5 w-5 text-[oklch(0.75_0.15_85)]" />
+                          ) : (
+                            <Lock className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${achievement.unlocked ? "text-foreground" : "text-muted-foreground"}`}>
+                            {achievement.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{achievement.description}</p>
+                          {achievement.unlocked ? (
+                            <p className="text-[10px] text-[oklch(0.75_0.15_85)] mt-1">
+                              Desbloqueada em {achievement.unlockedDate}
+                            </p>
+                          ) : (
+                            <div className="mt-1.5">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-muted-foreground">
+                                  {typeof achievement.progress === "number" && achievement.progress % 1 !== 0
+                                    ? achievement.progress.toFixed(1)
+                                    : achievement.progress}/{achievement.maxProgress}
+                                </span>
+                              </div>
+                              <Progress
+                                value={(Math.min(achievement.progress, achievement.maxProgress) / achievement.maxProgress) * 100}
+                                className="h-1.5 bg-muted [&>div]:bg-muted-foreground"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* PIX Payment Modal */}
-      <PixModal open={showPixModal} onClose={() => setShowPixModal(false)} />
+      <PixModal open={showPixModal} onClose={() => setShowPixModal(false)} value={pixValue} />
     </div>
   )
 }
